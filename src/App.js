@@ -1,11 +1,11 @@
 import logo from './logo.svg';
 import './App.css';
-import Chat from './components/Chat';
+import ChatApp from './components/ChatApp';
 
 function App() {
   return (
     <div className="App">
-     <Chat />
+     <ChatApp />
     </div>
   );
 }
