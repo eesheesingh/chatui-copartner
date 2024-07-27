@@ -5,6 +5,7 @@ module.exports = {
     "./pages/**/*.{js,jsx}", 
     "./components/**/*.{js,jsx}", 
   ],
+  
   theme: {
     extend: {
       colors: {
