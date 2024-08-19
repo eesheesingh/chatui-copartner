@@ -12,46 +12,55 @@ import 'react-toastify/dist/ReactToastify.css';
 const ChatApp = () => {
   const location = useLocation();
   const [username, setUsername] = useState('');
-  const [userId, setUserId] = useState('');
+  const [userId, setUserId] = useState(sessionStorage.getItem('userId') || '');
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
   const [conversations, setConversations] = useState({});
   const [unreadMessages, setUnreadMessages] = useState({});
   const [contacts, setContacts] = useState([]);
-  const [plans, setPlans] = useState([]); // State to store plans
+  const [expertId, setExpertId] = useState(sessionStorage.getItem('expertId') || null); // State to store the expertId
   const connectionRef = useRef(null);
   const [connectionStatus, setConnectionStatus] = useState('Not connected');
   const [loading, setLoading] = useState(false);
   const [userImage, setUserImage] = useState('');
   const [loadingContacts, setLoadingContacts] = useState(true);
-  const [timer, setTimer] = useState(40); // Timer state in seconds
   const [showPopup, setShowPopup] = useState(false); // Popup state
+  const [remainingTime, setRemainingTime] = useState(null); // State to track remaining time
+  const [planType, setPlanType] = useState('D'); // State to track the current plan type
+  const [planId, setPlanId] = useState(userId); // State to track the current plan ID (initially userId)
 
   useEffect(() => {
     const pathSegments = location.pathname.split('/');
     const potentialUsername = pathSegments[2];
     const potentialUserId = pathSegments[1];
-    const expertId = pathSegments[3]; // Last parameter in the URL
-
+    const expertIdFromPath = pathSegments[3]; // Last parameter in the URL
+  
     if (potentialUsername && /^[0-9]{10}$/.test(potentialUsername)) {
       setUsername(potentialUsername);
     } else {
       console.error('Invalid username in URL path');
       return;
     }
-
+  
     if (potentialUserId) {
       setUserId(potentialUserId);
+      setPlanId(potentialUserId); // Set the planId to userId initially
+      sessionStorage.setItem('userId', potentialUserId); // Save userId to session storage
     } else {
       console.error('Invalid userId in URL path');
       return;
     }
-
+  
+    if (expertIdFromPath) {
+      setExpertId(expertIdFromPath); // Store the expertId in state
+      sessionStorage.setItem('expertId', expertIdFromPath); // Save expertId to session storage
+    }
+  
     const fetchUserImage = async () => {
       const userImg = 'https://example.com/path-to-user-image.jpg'; // Replace with actual image URL
       setUserImage(userImg);
     };
-
+  
     const fetchContacts = async () => {
       setLoadingContacts(true);
       try {
@@ -76,7 +85,6 @@ const ChatApp = () => {
             return null;
           }));
           setContacts(fetchedContacts.filter(contact => contact !== null));
-          setPlans(response.data.data); // Store plans in state
         }
       } catch (error) {
         console.error('Error fetching contacts: ', error);
@@ -84,7 +92,7 @@ const ChatApp = () => {
         setLoadingContacts(false);
       }
     };
-
+  
     const fetchExpertAndSelect = async (expertId) => {
       try {
         const expertResponse = await axios.get(`https://copartners.in:5132/api/Experts/${expertId}`);
@@ -108,27 +116,39 @@ const ChatApp = () => {
         console.error('Error fetching expert data: ', error);
       }
     };
-
+  
     fetchUserImage();
     fetchContacts().then(() => {
-      if (expertId) {
-        fetchExpertAndSelect(expertId);
+      if (expertIdFromPath) {
+        fetchExpertAndSelect(expertIdFromPath);
       }
     });
   }, [location.pathname]);
 
   useEffect(() => {
-    let timerInterval;
-    if (selectedContact && timer > 0) {
-      timerInterval = setInterval(() => {
-        setTimer(prevTimer => prevTimer - 1);
+    let countdownInterval;
+
+    if (remainingTime !== null && remainingTime > 0) {
+      countdownInterval = setInterval(() => {
+        setRemainingTime(prevTime => {
+          if (prevTime <= 1) {
+            clearInterval(countdownInterval);
+            setShowPopup(true); // Open the popup when time is up
+            return 0;
+          }
+          return prevTime - 1;
+        });
       }, 1000);
-    } else if (timer === 0) {
-      clearInterval(timerInterval);
-      setShowPopup(true); // Show popup when timer reaches 0
     }
-    return () => clearInterval(timerInterval);
-  }, [selectedContact, timer]);
+
+    return () => clearInterval(countdownInterval);
+  }, [remainingTime]);
+
+  useEffect(() => {
+    if (remainingTime === 0) {
+      setShowPopup(true); // Open the popup if the time is already up
+    }
+  }, [remainingTime]);
 
   const startConnection = async (username, receiver, planType) => {
     console.log('Starting connection...');
@@ -138,9 +158,20 @@ const ChatApp = () => {
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-    connection.on('ReceiveMessage', (user, message, receivedPlanType) => {
+    connection.on('ReceiveMessage', (user, message, receivedPlanType, planId, startDateTime, endDateTime) => {
       if (message !== '1' && message !== '20') {
-        const newMessage = { user, message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), planType: receivedPlanType };
+        console.log(`Received message from ${user} with startDateTime: ${startDateTime} and endDateTime: ${endDateTime}`);
+        
+        const newMessage = { 
+          user, 
+          message, 
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+          planType: receivedPlanType,
+          startDateTime: startDateTime,
+          endDateTime: endDateTime,
+          planId: planId,
+        };
+        
         setMessages((prevMessages) => [...prevMessages, newMessage]);
         setConversations((prevConversations) => ({
           ...prevConversations,
@@ -151,6 +182,18 @@ const ChatApp = () => {
           ...prevUnread,
           [user]: (prevUnread[user] || 0) + 1
         }));
+
+        if (endDateTime) {
+          const endTime = new Date(endDateTime).getTime();
+          const currentTime = new Date().getTime();
+          const timeRemaining = Math.floor((endTime - currentTime) / 1000);
+
+          if (timeRemaining > 0) {
+            setRemainingTime(timeRemaining);
+          } else {
+            setShowPopup(true); // Open the popup if the time is already up
+          }
+        }
       }
     });
 
@@ -209,24 +252,29 @@ const ChatApp = () => {
 
   const handleSendMessage = async (message) => {
     const receiver = selectedContact.email;
-    const planType = selectedContact.planType; // Retrieve planType from selectedContact
+  
+    // Proceed with sending the message without GetChatAvailUser API
     if (connectionRef.current && connectionRef.current.state === signalR.HubConnectionState.Connected) {
       try {
-        await connectionRef.current.invoke('SendMessage', username, receiver, message.text, planType);
+        await connectionRef.current.invoke('SendMessage', username, receiver, message.text, planType, planId);
         const newMessage = {
           user: username,
           message: message.text,
+          receiver: receiver,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          planType: planType // Add planType to newMessage
+          planType: planType,
+          planId: planId // Add planId to newMessage
         };
         setMessages((prevMessages) => [...prevMessages, newMessage]);
         setConversations((prevConversations) => ({
           ...prevConversations,
           [receiver]: [...(prevConversations[receiver] || []), newMessage],
         }));
-        console.log(`Message sent with planType: ${planType}`);
+  
+        // Retain console logging of planType and planId
+        console.log(`Message sent with planType: ${planType} and planId: ${planId}`);
       } catch (err) {
-        console.error('Error sending message: ', err.toString());
+        console.error('Error sending message:', err.toString());
       }
     } else {
       console.log("Cannot send data if the connection is not in the 'Connected' state.");
@@ -234,25 +282,70 @@ const ChatApp = () => {
     }
   };
 
-  const selectUser = (contact) => {
+  const selectUser = async (contact) => {
     setMessages(conversations[contact.email] || []);
     setLoading(true);
-    startConnection(username, contact.email, contact.planType); // Pass planType to startConnection
+    setExpertId(contact.expertsId); // Set the expertId when a contact is selected
+    sessionStorage.setItem('expertId', contact.expertsId); // Update the expertId in session storage
+  
+    const storedUserId = sessionStorage.getItem('userId');
+    const storedExpertId = sessionStorage.getItem('expertId');
+  
+    try {
+      const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatAvailUser/${storedUserId}`);
+      
+      if (response.data.isSuccess) {
+        const userPlans = response.data.data.filter(plan => plan.userId === storedUserId && plan.expertsId === storedExpertId);
+        const latestPlanD = userPlans.find(plan => plan.planType === 'D' && new Date(plan.endTime) > new Date());
+        const latestPlanF = userPlans.find(plan => plan.planType === 'F' && new Date(plan.endTime) > new Date());
+  
+        if (latestPlanD && latestPlanF) {
+          // Both PlanType "D" and "F" exist, show premium popup and don't allow messaging with PlanType "D"
+          setShowPopup(true);
+        } else if (latestPlanD) {
+          // Only PlanType "D" exists, allow messaging with PlanType "D"
+          setPlanType('D');
+          setPlanId(latestPlanD.id);
+        } else if (latestPlanF) {
+          // Only PlanType "F" exists, show premium popup
+          setShowPopup(true);
+        } else {
+          // No existing PlanType "D" or "F", allow messaging with default PlanType "D"
+          setPlanType('D');
+        }
+      } else {
+        // Handle error if API call was not successful
+        console.error('Failed to fetch user plans');
+      }
+    } catch (error) {
+      console.error('Error fetching user plans:', error);
+    }
+  
+    startConnection(username, contact.email, planType); // Pass planType to startConnection
     setSelectedContact(contact);
     setUnreadMessages((prevUnread) => ({
       ...prevUnread,
       [contact.email]: 0
     }));
-    setTimer(40); // Reset the timer when a new contact is selected
     setShowPopup(false); // Hide the popup if a new contact is selected
   };
+  
 
   const handleBack = () => {
     setSelectedContact(null);
   };
 
-  const handleSelectPlan = (duration) => {
-    setTimer((prevTimer) => prevTimer + duration * 60); // Add the selected plan duration to the timer
+  const handleSelectPlan = (duration, selectedPlanId, selectedPlanType) => {
+    setPlanType(selectedPlanType);
+    setPlanId(selectedPlanId);
+
+    // Update the remaining time and start/end time based on the selected plan's duration
+    const currentTime = new Date();
+    const newEndTime = new Date(currentTime.getTime() + duration * 60000); // Add duration in minutes to the current time
+
+    // Update remaining time
+    setRemainingTime(Math.floor((newEndTime.getTime() - currentTime.getTime()) / 1000));
+
     setShowPopup(false); // Hide the popup
   };
 
@@ -279,12 +372,12 @@ const ChatApp = () => {
               onSendMessage={handleSendMessage}
               onBack={handleBack}
               loading={loading}
-              timer={timer}
               showPopup={showPopup}
-              plans={plans}
+              expertId={expertId} // Pass expertId to ChatArea
               handleSelectPlan={handleSelectPlan}
               setShowPopup={setShowPopup} // Pass setShowPopup as a prop
               connectionStatus={connectionStatus} // Pass connectionStatus as a prop
+              remainingTime={remainingTime} // Pass remainingTime as a prop
             />
           ) : (
             <motion.div
