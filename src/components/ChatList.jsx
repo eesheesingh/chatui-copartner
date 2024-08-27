@@ -3,8 +3,20 @@ import { logo, sebi, loadingGif, chatIcon } from '../assets';
 import { IoMdSearch } from "react-icons/io";
 import SearchPage from './SearchPage';
 import axios from 'axios';
+import { useNavigate, useLocation } from 'react-router-dom'; // Import useLocation for dynamic URL handling
 
-const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, loading }) => {
+const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, loading, setPlanType, setLatestTimespan }) => {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('Chats');
+  const [chatListHeight, setChatListHeight] = useState(window.innerHeight);
+  const [experts, setExperts] = useState([]);
+  const [loadingExperts, setLoadingExperts] = useState(true);
+  const [contactsData, setContactsData] = useState(contacts); // Local state to manage contacts
+  const [activeChats, setActiveChats] = useState({}); // State to manage the active chat state per expert
+
+  const navigate = useNavigate(); // For navigation
+  const location = useLocation(); // For dynamic URL segments
+
   const getExpertType = (typeId) => {
     switch (typeId) {
       case 1:
@@ -17,12 +29,6 @@ const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, lo
         return "Unknown";
     }
   };
-
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('Chats');
-  const [chatListHeight, setChatListHeight] = useState(window.innerHeight);
-  const [experts, setExperts] = useState([]);
-  const [loadingExperts, setLoadingExperts] = useState(true);
 
   const handleSearchClick = () => {
     setIsSearchOpen(true);
@@ -76,7 +82,55 @@ const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, lo
     };
 
     fetchExperts();
+
+    const intervalId = setInterval(fetchExperts, 30000); // Fetch data every 30 seconds
+
+    return () => clearInterval(intervalId); // Clear interval on component unmount
   }, []);
+
+  useEffect(() => {
+    setContactsData(contacts);
+  }, [contacts]);
+
+  const handleContactSelect = (contact) => {
+    // Retrieve the dynamic parameters
+    const pathSegments = location.pathname.split('/');
+    const userId = pathSegments[1];
+    const username = pathSegments[2];
+  
+    setActiveChats(prevState => ({
+      ...prevState,
+      [contact.email]: true // Mark this contact as active
+    }));
+  
+    // Update the URL to include the dynamic userId, username, and selected expert's ID
+    const newPath = `/${userId}/${username}/${contact.expertsId}`;
+    navigate(newPath);
+  
+    // Update the sessionStorage with the new expert ID
+    sessionStorage.setItem('expertId', contact.expertsId);
+  
+    // Retrieve the planType for the selected expert from sessionStorage
+    const storedPlanType = sessionStorage.getItem(`planType_${contact.expertsId}`);
+    if (storedPlanType) {
+      setPlanType(storedPlanType);
+    } else {
+      setPlanType('D'); // Default planType if none is stored
+    }
+  
+    // Retrieve the time span for the selected expert from sessionStorage
+    const storedTimespan = sessionStorage.getItem(`timespan_${contact.expertsId}`);
+    if (storedTimespan) {
+      setLatestTimespan(JSON.parse(storedTimespan));
+    } else {
+      setLatestTimespan(null); // Clear if no time span is stored
+    }
+  
+    onSelectContact(contact);
+  };
+  
+
+
 
   return (
     <div className="relative min-h-screen bg-white" style={{ height: chatListHeight }}>
@@ -116,7 +170,7 @@ const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, lo
               </div>
             ) : (
               <div className="overflow-y-auto h-[calc(100vh-200px)] md:h-[calc(100vh-150px)] bg-transparent">
-                {contacts.map((contact, index) => {
+                {contactsData.map((contact, index) => {
                   const lastMessage = conversations[contact.name]?.slice(-1)[0] || {};
                   const truncatedMessage = truncateMessage(lastMessage.sender === 'You' ? `You: ${lastMessage.text}` : lastMessage.text);
                   const unreadCount = unreadMessages[contact.email] || 0;
@@ -125,7 +179,7 @@ const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, lo
                     <div
                       key={index}
                       className={`relative flex items-center p-4 cursor-pointer hover:bg-gray-100 border-b border-gray-200 transition duration-200`}
-                      onClick={() => onSelectContact(contact)}
+                      onClick={() => handleContactSelect(contact)}
                     >
                       <div className='flex flex-col justify-center items-center w-[120px] pr-3'>
                         <img
@@ -149,7 +203,7 @@ const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, lo
                           <div className="flex flex-col items-end justify-evenly mr-2">
                             <button
                               className="hover:bg-blue-500 border-2 border-[#000] text-[#000] hover:text-white font-bold text-[17px] flex items-center transition-all py-2 px-4 rounded-lg" 
-                              onClick={() => onSelectContact(contact)}
+                              onClick={() => handleContactSelect(contact)}
                             >
                               <img src={chatIcon} alt="" className='w-7' />
                               Chat
@@ -168,63 +222,67 @@ const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, lo
               </div>
             ))}
             {activeTab === 'WaitList' && (
-              <div className="space-y-4">
-                <div className="flex items-center p-4 bg-gray-800 rounded-lg">
-                  <span className="text-gray-400">No contacts in WaitList</span>
-                </div>
-              </div>
-            )}
-            {activeTab === 'Experts' && (loadingExperts ? (
-              <div className="flex flex-col justify-center items-center h-full">
-                <img src={loadingGif} alt="Loading..." className="w-16 h-16" />
-                <h1 className='text-gray-700 text-lg'>Loading...</h1>
-              </div>
-            ) : (
-              <div className="overflow-y-auto h-[calc(100vh-200px)] md:h-[calc(100vh-150px)] bg-white">
+              <div className="overflow-y-auto h-[calc(100vh-200px)] md:h-[calc(100vh-150px)]">
                 {experts.map((expert, index) => (
                   <div
                     key={index}
-                    className={`relative flex items-center p-4 cursor-pointer hover:bg-gray-100 border-b border-gray-200 transition duration-200`}
-                    onClick={() => onSelectContact(expert)}
+                    className="flex items-center px-4 py-2 cursor-pointer hover:bg-gray-100"
+                    onClick={() => {
+                      if (!activeChats[expert.email]) {
+                        setActiveChats(prevState => ({
+                          ...prevState,
+                          [expert.email]: true // Mark this expert as active
+                        }));
+                        handleContactSelect(expert);
+                      }
+                    }}
                   >
-                    <div className='flex flex-col justify-center items-center w-[120px] pr-3'>
-                      <img
-                        src={expert.expertImagePath}
-                        alt={expert.name}
-                        className="w-16 h-16 rounded-full border-[1px] border-[#000] bg-gray-200"
-                      />
-                      <p className="mt-2 text-[13px] text-gray-600">{expert.sebiRegNo}</p>
-                      <img src={sebi} alt="" className='w-10' />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-gray-600 text-sm flex flex-row justify-between">
-                        <div className='flex flex-col'>
-                          <span className="text-gray-800 text-[20px] font-bold">{expert.channelName}</span>
-                          <p className="font-bold">{expert.name}</p>
-                          <p className="mb-1">{getExpertType(expert.subscriptionType)}</p>
-                          <div className='flex gap-2'>
-                            <p className="text-[17px] font-bold line-through">₹{expert.prize}/min </p><span className='text-gradient-2 font-bold text-[17px]'>FREE</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end justify-evenly mr-2">
-                          <button
-                            className="hover:bg-blue-500 border-2 border-blue-500 text-blue-500 hover:text-white font-bold text-[17px] flex items-center transition-all py-2 px-4 rounded-lg" 
-                            onClick={() => onSelectContact(expert)}
-                          >
-                            <img src={chatIcon} alt="" className='w-7' />
-                            Chat
-                          </button>
-                        </div>
-                      </div>
+                    <img
+                      src={expert.img}
+                      alt={expert.name}
+                      className="w-10 h-10 rounded-full mr-4"
+                    />
+                    <div>
+                      <p className="font-semibold text-gray-800">{expert.name}</p>
+                      <p className="text-sm text-gray-600">{getExpertType(expert.subscriptionType)}</p>
                     </div>
                   </div>
                 ))}
               </div>
-            ))}
+            )}
+            {activeTab === 'Experts' && (
+              <div className="overflow-y-auto h-[calc(100vh-200px)] md:h-[calc(100vh-150px)]">
+                {experts.map((expert, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center px-4 py-2 cursor-pointer hover:bg-gray-100"
+                    onClick={() => {
+                      if (!activeChats[expert.email]) {
+                        setActiveChats(prevState => ({
+                          ...prevState,
+                          [expert.email]: true // Mark this expert as active
+                        }));
+                        handleContactSelect(expert);
+                      }
+                    }}
+                  >
+                    <img
+                      src={expert.img}
+                      alt={expert.name}
+                      className="w-10 h-10 rounded-full mr-4"
+                    />
+                    <div>
+                      <p className="font-semibold text-gray-800">{expert.name}</p>
+                      <p className="text-sm text-gray-600">{getExpertType(expert.subscriptionType)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       ) : (
-        <SearchPage onClose={handleSearchClose} contacts={contacts} onSelectContact={onSelectContact} />
+        <SearchPage onClose={handleSearchClose} />
       )}
     </div>
   );

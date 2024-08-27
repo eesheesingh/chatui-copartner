@@ -2,16 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { IoMdAttach } from "react-icons/io";
 import { MdCancel, MdDoneAll } from "react-icons/md";
 import { back, loadingGif, sender } from '../assets';
-import TimerPopup from './TimePopup';
 import { motion } from 'framer-motion';
 import { BiLogoTelegram } from 'react-icons/bi';
+import FreePlanPopup from './FreePlanPopup';
+import PremiumPlanPopup from './PremiumPlanPopup';
 
-const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessage, onBack, loading, showPopup, expertId, handleSelectPlan, setShowPopup, connectionStatus, startDateTime, endDateTime }) => {
+const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessage, onBack, loading, expertId, connectionStatus, startEndTime, onShowPlanDetails, timer, showFreePlanPopup, showPremiumPlanPopup, freePlanDuration, premiumPlans, handleSelectPlan, closePlanPopups }) => {
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [chatAreaHeight, setChatAreaHeight] = useState(window.innerHeight);
-  const [startEndTime, setStartEndTime] = useState(null); // State to store start and end time
-  const [remainingTime, setRemainingTime] = useState(null); // State to store the remaining time in seconds
   const messagesEndRef = useRef(null);
 
   const sendMessage = () => {
@@ -56,60 +55,8 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
     return () => window.removeEventListener('resize', updateChatAreaHeight);
   }, []);
 
-  // Calculate and set remaining time based on startDateTime and endDateTime
-  useEffect(() => {
-    if (startDateTime && endDateTime) {
-      const start = new Date(startDateTime);
-      const end = new Date(endDateTime);
-      const now = new Date();
-
-      const durationInSeconds = Math.floor((end - start) / 1000);
-      const remainingTimeInSeconds = Math.floor((end - now) / 1000);
-
-      setStartEndTime({
-        start: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        end: end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      });
-
-      if (remainingTimeInSeconds > 0) {
-        setRemainingTime(remainingTimeInSeconds);
-      } else {
-        setRemainingTime(0);
-      }
-    }
-  }, [startDateTime, endDateTime]);
-
-  // Handle the countdown timer
-  useEffect(() => {
-    let countdownInterval;
-
-    if (remainingTime !== null && remainingTime > 0) {
-      countdownInterval = setInterval(() => {
-        setRemainingTime(prevTime => {
-          if (prevTime <= 1) {
-            clearInterval(countdownInterval);
-            setShowPopup(true); // Show popup when time is up
-            return 0;
-          }
-          return prevTime - 1;
-        });
-      }, 1000);
-    }
-
-    return () => clearInterval(countdownInterval);
-  }, [remainingTime]);
-
-  const formatRemainingTime = () => {
-    if (remainingTime === 0) {
-      return 'Your time is up';
-    }
-    const minutes = Math.floor(remainingTime / 60);
-    const seconds = remainingTime % 60;
-    return `Time remaining: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-  };
-
   return (
-    <motion.div
+       <motion.div
       className="flex flex-col"
       style={{ height: chatAreaHeight, backgroundColor: '#fff' }}
       initial={{ opacity: 0, x: 50 }}
@@ -135,13 +82,19 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
                 {`Time Span: ${startEndTime.start} - ${startEndTime.end}`}
               </div>
             )}
-            {remainingTime !== null && (
-              <div className="text-sm text-gray-500">
-                {formatRemainingTime()}
+            {timer !== null && timer > 0 && (
+              <div className="text-sm text-red-600">
+                {`Time Remaining: ${Math.floor(timer / 60)}m ${timer % 60}s`}
               </div>
             )}
           </div>
         </div>
+        <button
+          className="text-sm text-blue-600 underline"
+          onClick={onShowPlanDetails} 
+        >
+          View Plan Details
+        </button>
       </div>
       <div className="flex-grow p-4 overflow-y-auto bg-[#f4f4f4] rounded-t-[30px]">
         {loading ? (
@@ -207,7 +160,26 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
           <BiLogoTelegram className='text-[22px]' />
         </button>
       </div>
-      {showPopup && <TimerPopup onClose={() => setShowPopup(false)} expertId={expertId} onSelectPlan={handleSelectPlan} />}
+
+      {/* Render the Plan Popups inside ChatArea */}
+      {showFreePlanPopup && freePlanDuration && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <FreePlanPopup 
+            freePlan={{ duration: freePlanDuration, id: expertId }}
+            onSelectPlan={handleSelectPlan}
+            onClose={closePlanPopups} 
+          />
+        </div>
+      )}
+      {showPremiumPlanPopup && premiumPlans.length > 0 && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <PremiumPlanPopup 
+            plans={premiumPlans} 
+            onSelectPlan={handleSelectPlan}
+            onClose={closePlanPopups} 
+          />
+        </div>
+      )}
     </motion.div>
   );
 };
