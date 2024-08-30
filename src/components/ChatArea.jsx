@@ -90,7 +90,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
             </div>
             {startEndTime && (
               <div className="text-sm text-gray-600">
-                {`Time Span: ${startEndTime.start} - ${startEndTime.end}`}
+                {`Time: ${startEndTime.start} - ${startEndTime.end}`}
               </div>
             )}
             {timer !== null && timer > 0 ? (
@@ -99,8 +99,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
                 animate={{ opacity: 1 }}
                 className="text-sm text-red-500 mt-1"
               >
-               {`You've got: ${minutes}m ${seconds.toFixed()}s`}
-
+                {`You've got: ${minutes}m ${seconds.toFixed()}s`}
               </motion.div>
             ) : (
               <motion.div
@@ -127,40 +126,79 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
             <img src={loadingGif} alt="Loading..." className="w-20 h-20" />
           </div>
         ) : (
-          messages.map((message, index) => (
-            <motion.div
-              key={index}
-              className={`mb-4 flex ${message.user === username ? 'justify-end' : 'justify-start'} items-start gap-2.5`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }} // Delay for a staggered effect
-            >
-              {message.user !== username && (
+          <>
+            {messages.length === 0 && (
+              <motion.div
+                className="mb-4 flex justify-start items-start gap-2.5"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
                 <div className="flex items-center">
-                  <img src={selectedContact.img} alt={selectedContact.name} className="w-8 h-8 rounded-full mr-2 bg-gray-200 border-[1px] border-gray-300" />
+                  <img
+                    src={selectedContact.img}
+                    alt={selectedContact.name}
+                    className="w-8 h-8 rounded-full mr-2 bg-gray-200 border-[1px] border-gray-300"
+                  />
                 </div>
-              )}
-              <div className={`flex flex-col p-2 rounded-lg shadow-md ${message.user === username ? 'bg-[#a7d6f79c] text-[#000] rounded-tr-none self-end' : 'bg-gray-200 text-black rounded-tl-none'}`} style={{ maxWidth: '75%', wordWrap: 'break-word' }}>
-                {message.message && <p className="text-sm py-2.5">{message.message}</p>}
-                {message.file && (
-                  <img src={message.file} alt="uploaded" className="mt-2 rounded-xl max-w-full" />
+                <div
+                  className="flex flex-col p-2 rounded-lg shadow-md bg-gray-200 text-black rounded-tl-none"
+                  style={{ maxWidth: '75%', wordWrap: 'break-word' }}
+                >
+                  <p className="text-sm py-2.5">Hi, user start your conversation by sending Hi</p>
+                  <div className="flex justify-between text-black gap-2">
+                    <span className="text-[10px]">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-[10px] flex items-center gap-1">
+                      <MdDoneAll />
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+            {messages.map((message, index) => (
+              <motion.div
+                key={index}
+                className={`mb-4 flex ${message.user === username ? 'justify-end' : 'justify-start'} items-start gap-2.5`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }} // Delay for a staggered effect
+              >
+                {message.user !== username && (
+                  <div className="flex items-center">
+                    <img
+                      src={selectedContact.img}
+                      alt={selectedContact.name}
+                      className="w-8 h-8 rounded-full mr-2 bg-gray-200 border-[1px] border-gray-300"
+                    />
+                  </div>
                 )}
-                <div className='flex justify-between text-black gap-2'>
-                  <span className="text-[10px]">{message.timestamp}</span>
-                  <span className="text-[10px] flex items-center gap-1">
-                    {message.status || <MdDoneAll />}
-                  </span>
+                <div
+                  className={`flex flex-col p-2 rounded-lg shadow-md ${
+                    message.user === username ? 'bg-[#a7d6f79c] text-[#000] rounded-tr-none self-end' : 'bg-gray-200 text-black rounded-tl-none'
+                  }`}
+                  style={{ maxWidth: '75%', wordWrap: 'break-word' }}
+                >
+                  {message.message && <p className="text-sm py-2.5">{message.message}</p>}
+                  {message.file && (
+                    <img src={message.file} alt="uploaded" className="mt-2 rounded-xl max-w-full" />
+                  )}
+                  <div className="flex justify-between text-black gap-2">
+                    <span className="text-[10px]">{message.timestamp}</span>
+                    <span className="text-[10px] flex items-center gap-1">
+                      {message.status || <MdDoneAll />}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              {message.user === username && (
-                <div className="flex items-center">
-                  <img src={sender} alt="You" className="w-8 h-8 rounded-full ml-2" />
-                </div>
-              )}
-            </motion.div>
-          ))
+                {message.user === username && (
+                  <div className="flex items-center">
+                    <img src={sender} alt="You" className="w-8 h-8 rounded-full ml-2" />
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </>
         )}
-        <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} />
       </div>
       {selectedFile && (
         <div className="p-4 border-t border-gray-300 flex bg-gray-200 items-center gap-2 relative">
@@ -173,6 +211,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
       <div className="p-4 border-t border-gray-300 flex bg-[#a7d6f78a] items-center gap-2">
         <label className="ml-2 p-2 text-[22px] text-black rounded cursor-pointer">
           <input type="file" className="hidden" onChange={handleFileUpload} />
+          <IoMdAttach />
         </label>
         <input
           type="text"
@@ -215,3 +254,4 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
 };
 
 export default ChatArea;
+

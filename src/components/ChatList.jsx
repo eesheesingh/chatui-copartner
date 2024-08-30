@@ -13,7 +13,7 @@ const ContactItem = ({ contact, unreadCount, onSelectContact, getExpertType }) =
     >
       <div className='flex flex-col justify-center items-center w-[120px] pr-3'>
         <img
-          src={contact.img}
+          src={contact.img} // Ensure this field is correctly populated
           alt={contact.name}
           className="w-16 h-16 rounded-full border-[1px] border-[#00000053] bg-gray-200"
         />
@@ -107,6 +107,8 @@ const ChatList = ({ contacts, onSelectContact, conversations, unreadMessages, lo
               return {
                 ...expert,
                 ...expertResponse.data.data,
+                img: expertResponse.data.data.expertImagePath, // Ensure the image path is correctly mapped
+                name: expertResponse.data.data.name, // Ensure the name is correctly mapped
               };
             }
             return null;
