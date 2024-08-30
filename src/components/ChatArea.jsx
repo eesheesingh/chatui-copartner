@@ -3,7 +3,8 @@ import { IoMdAttach } from "react-icons/io";
 import { MdCancel, MdDoneAll } from "react-icons/md";
 import { back, loadingGif, sender } from '../assets';
 import { motion } from 'framer-motion';
-import { BiLogoTelegram } from 'react-icons/bi';
+import { TbMessage2Share } from "react-icons/tb";
+import { MdOutlineHistory } from "react-icons/md";
 import FreePlanPopup from './FreePlanPopup';
 import PremiumPlanPopup from './PremiumPlanPopup';
 
@@ -12,6 +13,8 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
   const [selectedFile, setSelectedFile] = useState(null);
   const [chatAreaHeight, setChatAreaHeight] = useState(window.innerHeight);
   const messagesEndRef = useRef(null);
+  const minutes = Math.floor(timer / 60);
+  const seconds = timer % 60;
 
   const sendMessage = () => {
     if (newMessage.trim() || selectedFile) {
@@ -56,46 +59,68 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
   }, []);
 
   return (
-       <motion.div
-      className="flex flex-col"
+    <motion.div
+      className="flex flex-col relative" // Add relative positioning
       style={{ height: chatAreaHeight, backgroundColor: '#fff' }}
       initial={{ opacity: 0, x: 50 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -50 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="p-4 text-black flex items-center justify-between">
+      <div className="p-4 bg-white shadow-md rounded-lg flex items-center justify-between">
         <div className="flex items-center">
-          <button className="md:hidden p-2 mr-4" onClick={onBack}>
-            <img src={back} alt="Back" className='w-8' />
+          <button className="md:hidden p-2 mr-4 bg-gray-100 rounded-full" onClick={onBack}>
+            <img src={back} alt="Back" className="w-10" />
           </button>
-          <img src={selectedContact.img} alt={selectedContact.name} className="w-12 h-12 rounded-full mr-4 bg-gray-200 border-[1px] border-gray-300" />
+          <div className="relative mr-4">
+            <img
+              src={selectedContact.img}
+              alt={selectedContact.name}
+              className="w-16 h-auto rounded-full bg-gray-200 border-2 border-gray-300"
+            />
+            <span
+              className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${
+                connectionStatus === 'Connected!' ? 'bg-green-500' : 'bg-red-500'
+              }`}
+            ></span>
+          </div>
           <div className="flex flex-col">
-            <div className='flex flex-row'>
-              <span>{selectedContact.name}</span>
-              <div className="flex items-center ml-2">
-                <span className={`inline-block w-3 h-3 rounded-full ${connectionStatus === 'Connected!' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-              </div>
+            <div className="flex items-center">
+              <h2 className="text-lg font-semibold text-gray-900">{selectedContact.name}</h2>
             </div>
             {startEndTime && (
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-600">
                 {`Time Span: ${startEndTime.start} - ${startEndTime.end}`}
               </div>
             )}
-            {timer !== null && timer > 0 && (
-              <div className="text-sm text-red-600">
-                {`Time Remaining: ${Math.floor(timer / 60)}m ${timer % 60}s`}
-              </div>
+            {timer !== null && timer > 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-sm text-red-500 mt-1"
+              >
+               {`You've got: ${minutes}m ${seconds.toFixed()}s`}
+
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-sm text-gray-500 mt-1"
+              >
+                Your time will start when the expert replies.
+              </motion.div>
             )}
           </div>
         </div>
         <button
-          className="text-sm text-blue-600 underline"
-          onClick={onShowPlanDetails} 
+          className="text-[2rem] bg-[#e4e4e4] p-1 rounded-full transition-colors"
+          onClick={onShowPlanDetails}
         >
-          View Plan Details
+          <MdOutlineHistory />
         </button>
       </div>
+
       <div className="flex-grow p-4 overflow-y-auto bg-[#f4f4f4] rounded-t-[30px]">
         {loading ? (
           <div className="flex flex-col justify-center items-center h-full">
@@ -103,7 +128,13 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
           </div>
         ) : (
           messages.map((message, index) => (
-            <div key={index} className={`mb-4 flex ${message.user === username ? 'justify-end' : 'justify-start'} items-start gap-2.5`}>
+            <motion.div
+              key={index}
+              className={`mb-4 flex ${message.user === username ? 'justify-end' : 'justify-start'} items-start gap-2.5`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }} // Delay for a staggered effect
+            >
               {message.user !== username && (
                 <div className="flex items-center">
                   <img src={selectedContact.img} alt={selectedContact.name} className="w-8 h-8 rounded-full mr-2 bg-gray-200 border-[1px] border-gray-300" />
@@ -126,7 +157,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
                   <img src={sender} alt="You" className="w-8 h-8 rounded-full ml-2" />
                 </div>
               )}
-            </div>
+            </motion.div>
           ))
         )}
         <div ref={messagesEndRef} />
@@ -142,7 +173,6 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
       <div className="p-4 border-t border-gray-300 flex bg-[#a7d6f78a] items-center gap-2">
         <label className="ml-2 p-2 text-[22px] text-black rounded cursor-pointer">
           <input type="file" className="hidden" onChange={handleFileUpload} />
-          <IoMdAttach />
         </label>
         <input
           type="text"
@@ -157,7 +187,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
           onClick={sendMessage}
           disabled={!newMessage.trim() && !selectedFile}
         >
-          <BiLogoTelegram className='text-[22px]' />
+          <TbMessage2Share className='text-[22px]' />
         </button>
       </div>
 

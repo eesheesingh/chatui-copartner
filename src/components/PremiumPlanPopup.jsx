@@ -1,6 +1,18 @@
 import React from 'react';
 
 const PremiumPlanPopup = ({ plans, onSelectPlan, onClose }) => {
+  const getExpertType = (typeId) => {
+    switch (typeId) {
+      case 1:
+        return "Commodity";
+      case 2:
+        return "Equity";
+      case 3:
+        return "Futures & Options";
+      default:
+        return "Unknown";
+    }
+  };
   const handlePaidPlan = (plan) => {
     console.log('User has chosen the Premium plan:', plan);
     onSelectPlan(plan.duration, plan.id, 'P');

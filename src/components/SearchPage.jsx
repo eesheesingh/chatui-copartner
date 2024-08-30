@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { IoMdSearch } from "react-icons/io";
 import { back, chats } from '../assets';
 
-const SearchPage = ({ onClose, contacts, onSelectContact }) => {
+const SearchPage = ({ onClose, contacts = [], onSelectContact }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredContacts = contacts.filter(contact =>
@@ -10,7 +10,7 @@ const SearchPage = ({ onClose, contacts, onSelectContact }) => {
   );
 
   return (
-    <div className="p-6 min-h-screen bg-cover bg-center flex flex-col justify-start items-start" style={{ backgroundImage: `url(${chats})` }}>
+    <div className="p-6 min-h-screen bg-cover bg-center flex flex-col justify-start items-start text-[#000]">
       <div className="w-full max-w-lg">
         <div className="flex items-center mb-8 p-2 rounded-xl border border-[#ffffff50] bg-gray-900 bg-opacity-30 backdrop-filter backdrop-blur-md shadow-lg">
           <img src={back} alt="Back" className="w-8 h-8 text-gray-400 mr-2 cursor-pointer" onClick={onClose} />

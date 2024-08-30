@@ -91,6 +91,7 @@ const ChatApp = () => {
     };
 
     
+    
 
     const fetchContacts = async () => {
       setLoadingContacts(true);
@@ -148,80 +149,102 @@ const ChatApp = () => {
       }
     };
 
+    
+
     const fetchTimespan = async (userId, expertId) => {
       try {
-         const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatAvailUser/${userId}`);
-         if (response.data.isSuccess) {
-            const plans = response.data.data;
-            const latestPlan = plans.reduce((latest, plan) => {
-               const planEndTime = new Date(plan.endTime);
-               return planEndTime > new Date(latest.endTime) ? plan : latest;
-            }, plans[0]);
-   
-            console.log("Latest Plan:", latestPlan); // <-- Log the latest plan
-   
-            const isD = plans.some(plan => plan.planType === 'D');
-            const isF = plans.some(plan => plan.planType === 'F');
-            const isP = plans.some(plan => plan.planType === 'P');
-            
-            console.log("Conditions: ", { isD, isF, isP });  // <-- Log the condition checks
-   
-            const now = new Date();
-            const endTime = new Date(latestPlan.endTime);
-            if (now >= endTime) {
-               if (isD && !isF && !isP) {
-                  console.log("Showing FreePlanPopup");  // <-- Confirming the Popup trigger
-                  setShowFreePlanPopup(true);
-                  setShowPremiumPlanPopup(false);
-               } else if (isD && (isF || isP)) {
-                  console.log("Showing PremiumPlanPopup");  // <-- Confirming the Popup trigger
-                  setShowPremiumPlanPopup(true);
-                  setShowFreePlanPopup(false);
-               } else if (isD && !isF && isP){
-                console.log("Show Prem Popup plan");
-                setShowPremiumPlanPopup(true);
-                setShowFreePlanPopup(false)
-               }
-               else {
-                  setShowFreePlanPopup(false);
-                  setShowPremiumPlanPopup(false);
-               }
+        const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatAvailUser/${userId}`);
+        if (response.data.isSuccess) {
+          const plans = response.data.data;
+          const latestPlan = plans.reduce((latest, plan) => {
+            const planEndTime = new Date(plan.endTime);
+            return planEndTime > new Date(latest.endTime) ? plan : latest;
+          }, plans[0]);
+    
+          const now = new Date();
+          const endTime = new Date(latestPlan.endTime);
+    
+          const isD = plans.some(plan => plan.planType === 'D');
+          const isF = plans.find(plan => plan.planType === 'F');
+          const isP = plans.some(plan => plan.planType === 'P');
+    
+          console.log("Now:", now);
+          console.log("End Time:", endTime);
+          console.log("isD:", isD);
+          console.log("isF:", isF);
+          console.log("isP:", isP);
+    
+          if (isF) {
+            const createdOn = new Date(isF.createdOn);
+            console.log("Free Plan Created On:", createdOn);
+            if (
+              createdOn.toDateString() === now.toDateString() &&
+              now >= endTime
+            ) {
+              // FreePlanPopup should be shown for today's date
+              console.log("Showing FreePlanPopup");
+              setShowFreePlanPopup(true);
+              setShowPremiumPlanPopup(false);
+            } else if (now >= endTime) {
+              // Time is up, and there's no valid FreePlan for today, so show PremiumPlanPopup
+              console.log("FreePlan not valid for today. Showing PremiumPlanPopup");
+              setShowFreePlanPopup(false);
+              setShowPremiumPlanPopup(true);
             }
-   
-            const timeRemaining = endTime - now;
-            setTimer(timeRemaining > 0 ? timeRemaining / 1000 : 0);
-         } else {
+          } else if (isD && !isF && !isP && now >= endTime) {
+            console.log("Showing FreePlanPopup");
+            setShowFreePlanPopup(true);
+            setShowPremiumPlanPopup(false);
+          } else if ((isD && (isF || isP)) && now >= endTime) {
+            console.log("Showing PremiumPlanPopup");
+            setShowFreePlanPopup(false);
+            setShowPremiumPlanPopup(true);
+          } else if (isP && now >= endTime) {
+            console.log("Showing PremiumPlanPopup since end time is reached");
+            setShowFreePlanPopup(false);
+            setShowPremiumPlanPopup(true);
+          } else {
+            console.log("No valid plans to show a popup");
             setShowFreePlanPopup(false);
             setShowPremiumPlanPopup(false);
-         }
-      } catch (error) {
-         console.error('Error fetching timespan:', error);
-      }
-   };
-   
-   
-   const fetchPlans = async (userId, expertId) => {
-    try {
-        const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
-        if (response.data.isSuccess) {
-            const freePlan = response.data.data.find(plan => plan.planType === 'F');
-            const premiumPlans = response.data.data.filter(plan => plan.planType === 'P');
-            
-            if (freePlan) {
-                setFreePlanDuration(freePlan.duration);
-                if (planType !== 'D') {
-                    setPlanId(freePlan.id);  // Set the planId to the id of the free plan only if not 'D'
-                }
-            }
-            
-            if (premiumPlans.length > 0) {
-                setPremiumPlans(premiumPlans);
-            }
+          }
+    
+          const timeRemaining = endTime - now;
+          setTimer(timeRemaining > 0 ? timeRemaining / 1000 : 0);
+        } else {
+          console.log("No plans found, hiding all popups.");
+          setShowFreePlanPopup(false);
+          setShowPremiumPlanPopup(false);
         }
-    } catch (error) {
-        console.error('Error fetching plans:', error);
-    }
-};
+      } catch (error) {
+        console.error('Error fetching timespan:', error);
+      }
+    };
+    
+   
+   
+    const fetchPlans = async (userId, expertId) => {
+      try {
+          const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
+          if (response.data.isSuccess) {
+              const freePlan = response.data.data.find(plan => plan.planType === 'F');
+              const premiumPlans = response.data.data.filter(plan => plan.planType === 'P');
+              
+              if (freePlan) {
+                  setFreePlanDuration(freePlan.duration);
+                  if (planType !== 'D') {
+                      setPlanId(freePlan.id);  // Set the planId to the id of the free plan only if not 'D'
+                  }
+              }
+              
+              if (premiumPlans.length > 0) {
+                  setPremiumPlans(premiumPlans);
+              }
+          }
+      } catch (error) {
+          console.error('Error fetching plans:', error);
+      }
+  };
 
 
     fetchUserImage();
@@ -234,24 +257,45 @@ const ChatApp = () => {
   }, [location.pathname, planType]);
 
   useEffect(() => {
-    if (timer !== null && timer > 0) {
-      const intervalId = setInterval(() => {
-        setTimer((prevTimer) => {
-          const newTimer = prevTimer - 1;
-          if (newTimer <= 0) {
-            clearInterval(intervalId);
-            // Perform any action just before refreshing
-            console.log("Timer ended. Refreshing the page...");
-            window.location.reload(); // Refresh the page
-            return 0;
-          }
-          return newTimer;
-        });
-      }, 1000);
+    let intervalId;
+    let startTime = Date.now();
   
-      return () => clearInterval(intervalId);
-    }
+    const checkAndRefresh = () => {
+      if (timer !== null && timer > 0) {
+        const elapsedTime = (Date.now() - startTime) / 1000;
+        const newTimer = timer - elapsedTime;
+  
+        if (newTimer <= 0) {
+          setTimer(0);
+          window.location.reload(); // Auto-refresh when the timer is up
+        } else {
+          setTimer(newTimer);
+          startTime = Date.now(); // Reset start time for accurate timer updates
+        }
+      }
+    };
+  
+    intervalId = setInterval(checkAndRefresh, 1000);
+  
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (timer !== null && timer <= 0) {
+          window.location.reload(); // Refresh the page when the tab becomes visible again and time is up
+        } else {
+          checkAndRefresh(); // Ensure the timer is updated immediately when returning to the tab
+        }
+      }
+    };
+  
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [timer]);
+  
+  
   
 
   const startConnection = async (username, receiver) => {
@@ -400,6 +444,7 @@ const ChatApp = () => {
       setConnectionStatus('Not connected. Please try again.');
     }
   };
+  
 
   const handleSelectPlan = (duration, id, selectedPlanType) => {
     setPlanType(selectedPlanType);
