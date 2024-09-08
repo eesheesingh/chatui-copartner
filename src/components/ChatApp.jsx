@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import ChatList from './ChatList';
@@ -148,6 +149,8 @@ const ChatApp = () => {
 
     const fetchExpertAndSelect = async (expertId) => {
       try {
+        setShowFreePlanPopup(false);
+        setShowPremiumPlanPopup(false);
         const expertResponse = await axios.get(`https://copartners.in:5132/api/Experts/${expertId}`);
         if (expertResponse.data.isSuccess) {
           const expertData = expertResponse.data.data;

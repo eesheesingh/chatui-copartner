@@ -1,646 +1,406 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
-import ChatList from './ChatList';
-import ChatArea from './ChatArea';
-import PlanPopup from './PlanPopup';
-import FreePlanPopup from './FreePlanPopup';
-import PremiumPlanPopup from './PremiumPlanPopup';
-import logo from "../assets/copartnerBlack.png";
-import * as signalR from '@microsoft/signalr';
-import axios from 'axios';
-import { motion, AnimatePresence } from 'framer-motion';
-import { v4 as uuidv4 } from 'uuid';
-
-const ChatApp = () => {
-  const location = useLocation();
-  const [username, setUsername] = useState('');
-  const [userId, setUserId] = useState('');
-  const [selectedContact, setSelectedContact] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [conversations, setConversations] = useState({});
-  const [unreadMessages, setUnreadMessages] = useState({});
-  const [contacts, setContacts] = useState([]);
-  const [expertId, setExpertId] = useState(null);
-  const connectionRef = useRef(null);
-  const [connectionStatus, setConnectionStatus] = useState('Not connected');
-  const [loading, setLoading] = useState(false);
-  const [userImage, setUserImage] = useState('');
-  const [loadingContacts, setLoadingContacts] = useState(true);
-  const [showPlanPopup, setShowPlanPopup] = useState(false);
-  const [planDetails, setPlanDetails] = useState([]);
-  const [showFreePlanPopup, setShowFreePlanPopup] = useState(false);
-  const [showPremiumPlanPopup, setShowPremiumPlanPopup] = useState(false);
-  const [freePlanDuration, setFreePlanDuration] = useState(null);
-  const [premiumPlans, setPremiumPlans] = useState([]);
-  const [planId, setPlanId] = useState('');
-  const [paidPlanId, setPaidPlanId] = useState('');
-  const [latestTimespan, setLatestTimespan] = useState(null);
-  const [planType, setPlanType] = useState('D');
-  const [timer, setTimer] = useState(null);
-  const [currentExpertId, setCurrentExpertId] = useState(null);
-  const [hasUsedPlanD, setHasUsedPlanD] = useState(false); // Track if user has used PlanType D with any expert
-
-  const closePlanPopups = () => {
-    setShowFreePlanPopup(false);
-    setShowPremiumPlanPopup(false);
-  };
-
-  const goBackToChatList = () => {
-    closePlanPopups();
-    setSelectedContact(null);
-
-    // Trigger chat list refresh when returning to the list after closing popup
-    setTimeout(() => {
-      window.location.reload(); // Quick auto-refresh the chat list
-    }, 500); // Small delay before reload to ensure proper unmounting
-  };
-
-  const handleExpiredTimer = (expertId) => {
-    if (expertId !== currentExpertId) return;
-
-    console.log("Timer expired, refreshing the page...");
-    setTimer(null);
-
-    sessionStorage.removeItem(`timer_${expertId}`);
-    sessionStorage.removeItem('isTimerRunning');
-
-    window.location.reload();
-  };
-
-  useEffect(() => {
-    const pathSegments = location.pathname.split('/');
-    const potentialUserId = pathSegments[1];
-    const potentialUsername = pathSegments[2];
-    const expertIdFromPath = pathSegments[3];
-
-    if (expertIdFromPath) {
-      setCurrentExpertId(expertIdFromPath);
-      setExpertId(expertIdFromPath);
-      sessionStorage.setItem('expertId', expertIdFromPath);
-    }
-
-    const resetTimerAndTimespan = () => {
-      setTimer(null);
-      setLatestTimespan(null);
-    };
-
-    resetTimerAndTimespan();
-
-    const storedTimespan = sessionStorage.getItem(`timespan_${expertIdFromPath}`);
-    const storedTimer = sessionStorage.getItem(`timer_${expertIdFromPath}`);
-    const storedPlanType = sessionStorage.getItem(`planType_${expertIdFromPath}`);
-
-    if (storedTimespan) {
-      setLatestTimespan(JSON.parse(storedTimespan));
-    }
-
-    if (storedTimer) {
-      setTimer(parseInt(storedTimer, 10));
-    }
-
-    if (storedPlanType) {
-      setPlanType(storedPlanType);
-    }
-
-    if (potentialUserId) {
-      setUserId(potentialUserId);
-      sessionStorage.setItem('userId', potentialUserId);
-    } else {
-      console.error('Invalid userId in URL path');
-    }
-
-    if (potentialUsername && /^[0-9]{10}$/.test(potentialUsername)) {
-      setUsername(potentialUsername);
-    } else {
-      console.error('Invalid username in URL path');
-    }
-
-    const fetchUserImage = async () => {
-      const userImg = 'https://example.com/path-to-user-image.jpg';
-      setUserImage(userImg);
-    };
-
-    const fetchContacts = async () => {
-      setLoadingContacts(true);
-      try {
-        const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatUsersById/${potentialUserId}`);
-        if (response.data.isSuccess) {
-          const filteredUsers = response.data.data.filter(user => user.userType === 'RA');
-          const fetchedContacts = await Promise.all(filteredUsers.map(async (user) => {
-            const expertResponse = await axios.get(`https://copartners.in:5132/api/Experts/${user.id}`);
-            if (expertResponse.data.isSuccess) {
-              return {
-                name: expertResponse.data.data.name,
-                img: expertResponse.data.data.expertImagePath,
-                sebiRegNo: expertResponse.data.data.sebiRegNo,
-                email: user.username,
-                channelName: expertResponse.data.data.channelName,
-                subscriptionType: expertResponse.data.data.expertTypeId,
-                planName: 'N/A',
-                expertsId: user.id
-              };
-            }
-            return null;
-          }));
-          setContacts(fetchedContacts.filter(contact => contact !== null));
-        }
-      } catch (error) {
-        console.error('Error fetching contacts:', error);
-      } finally {
-        setLoadingContacts(false);
-      }
-    };
-
-    const fetchExpertAndSelect = async (expertId) => {
-      try {
-        const expertResponse = await axios.get(`https://copartners.in:5132/api/Experts/${expertId}`);
-        if (expertResponse.data.isSuccess) {
-          const expertData = expertResponse.data.data;
-          const contact = {
-            name: expertData.name,
-            img: expertData.expertImagePath,
-            sebiRegNo: expertData.sebiRegNo,
-            email: expertData.email,
-            channelName: expertData.channelName,
-            subscriptionType: expertData.expertTypeId,
-            planName: 'N/A',
-            expertsId: expertId
-          };
-          setSelectedContact(contact);
-          startConnection(potentialUsername, contact.email);
-          fetchTimespan(potentialUserId, expertId);
-          fetchPlans(potentialUserId, expertId);
-        }
-      } catch (error) {
-        console.error('Error fetching expert data:', error);
-      }
-    };
-
-    const fetchTimespan = async (userId, expertId) => {
-      setLoading(true);
-      try {
-        const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${userId}`);
-        if (response.data.isSuccess) {
-          const plans = response.data.data.filter(plan => plan.expertsId === expertId);
-          if (plans.length > 0) {
-            const latestPlan = plans.reduce((latest, plan) => {
-              const planEndTime = new Date(plan.endTime);
-              return planEndTime > new Date(latest.endTime) ? plan : latest;
-            }, plans[0]);
-
-            const now = new Date();
-            const endTime = new Date(latestPlan.endTime);
-            const timeRemaining = endTime - now;
-
-            if (timeRemaining > 0) {
-              setLatestTimespan({
-                start: latestPlan.startTime,
-                end: latestPlan.endTime,
-              });
-              setTimer(timeRemaining / 1000);
-              sessionStorage.setItem(`timer_${expertId}`, timeRemaining / 1000);
-              sessionStorage.setItem(`timespan_${expertId}`, JSON.stringify({
-                start: latestPlan.startTime,
-                end: latestPlan.endTime,
-              }));
-            } else {
-              handleExpiredTimer(expertId);
-            }
-          } else {
-            handleExpiredTimer(expertId);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching timespan:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchPlans = async (userId, expertId) => {
-      try {
-        const chatAvailResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${userId}`);
-        if (chatAvailResponse.data.isSuccess) {
-          const chatPlans = chatAvailResponse.data.data.filter(plan => plan.expertsId === expertId);
-          const hasUsedD = chatPlans.some(plan => plan.planType === 'D');
-          const hasUsedF = chatPlans.some(plan => plan.planType === 'F');
-
-          const expertPlansResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
-          if (expertPlansResponse.data.isSuccess) {
-            const expertPlans = expertPlansResponse.data.data;
-            const premiumPlans = expertPlans.filter(plan => plan.planType === 'P');
-            setPremiumPlans(premiumPlans);
-
-            const freePlan = expertPlans.find(plan => plan.planType === 'F');
-            if (freePlan) {
-              setFreePlanDuration(freePlan.duration || 2);
-              setPlanId(freePlan.id);  
-            }
-
-            const isTimerRunning = sessionStorage.getItem('isTimerRunning');
-            
-            // Open the popups based on conditions, but if planType "D" has been used, open the popups directly
-            if (hasUsedPlanD) {
-              if (freePlan) {
-                setShowFreePlanPopup(true);
-                setShowPremiumPlanPopup(false);
-              } else if (premiumPlans.length > 0) {
-                setShowPremiumPlanPopup(true);
-                setShowFreePlanPopup(false);
-              }
-            } else if (!isTimerRunning) {
-              if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
-                setShowPremiumPlanPopup(true);
-                setShowFreePlanPopup(false);
-              } else if (!freePlan && hasUsedD) {
-                setShowPremiumPlanPopup(true);
-                setShowFreePlanPopup(false);
-              } else if (hasUsedD && freePlan) {
-                setShowFreePlanPopup(true);
-                setShowPremiumPlanPopup(false);
-              } else if (premiumPlans.length > 0) {
-                setShowPremiumPlanPopup(false);
-                setShowFreePlanPopup(false);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching plan data:', error);
-      }
-    };
-
-    fetchUserImage();
-    fetchContacts().then(() => {
-      if (expertIdFromPath) {
-        fetchExpertAndSelect(expertIdFromPath);
-      }
-    });
-
-    // Check if user has used planType D with any expert and set `hasUsedPlanD` accordingly
-    const checkPlanTypeD = async () => {
-      try {
-        const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${potentialUserId}`);
-        if (response.data.isSuccess) {
-          const hasUsedD = response.data.data.some(plan => plan.planType === 'D');
-          if (hasUsedD) {
-            setHasUsedPlanD(true);
-          }
-        }
-      } catch (error) {
-        console.error('Error checking PlanType D:', error);
-      }
-    };
-
-    checkPlanTypeD();
-  }, [location.pathname]);
-
-  useEffect(() => {
-    let intervalId;
-    let startTime = Date.now();
-
-    const checkAndRefresh = () => {
-      if (timer !== null && timer > 0) {
-        const elapsedTime = (Date.now() - startTime) / 1000;
-        const newTimer = timer - elapsedTime;
-
-        if (newTimer <= 0) {
-          handleExpiredTimer(currentExpertId);
-        } else {
-          setTimer(newTimer);
-          startTime = Date.now();
-        }
-      }
-    };
-
-    intervalId = setInterval(checkAndRefresh, 1000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        if (timer !== null && timer <= 0) {
-          handleExpiredTimer(currentExpertId);
-        } else {
-          checkAndRefresh();
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [timer, currentExpertId]);
-
-  const startConnection = async (username, receiver) => {
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`https://copartners.in:5137/chathub?username=${encodeURIComponent(username)}&chatPartnerUsername=${encodeURIComponent(receiver)}`)
-      .withAutomaticReconnect([0, 2000, 10000, 30000])
-      .configureLogging(signalR.LogLevel.Information)
-      .build();
-
-    connection.on('ReceiveMessage', (user, message, receivedPlanType, planId, paidPlanId, startDateTime, endDateTime) => {
-      if (message !== '1' && message !== '20') {
-        const newMessage = {
-          user,
-          message,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          planType: receivedPlanType,
-          planId: planId,
-          paidPlanId: paidPlanId,
-          startDateTime: new Date(startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          endDateTime: new Date(endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-
-        setMessages((prevMessages) => [...prevMessages, newMessage]);
-        setConversations((prevConversations) => ({
-          ...prevConversations,
-          [user]: [...(prevConversations[user] || []), { sender: user, text: message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
-        }));
-
-        setUnreadMessages((prevUnread) => ({
-          ...prevUnread,
-          [user]: (prevUnread[user] || 0) + 1
-        }));
-
-        if (expertId === currentExpertId) {
-          const timespan = {
-            start: startDateTime,
-            end: endDateTime,
-          };
-          sessionStorage.setItem(`timespan_${currentExpertId}`, JSON.stringify(timespan));
-
-          const endTime = new Date(endDateTime);
-          const remainingTime = endTime - new Date();
-          setTimer(remainingTime > 0 ? remainingTime / 1000 : 0);
-          sessionStorage.setItem(`timer_${currentExpertId}`, remainingTime > 0 ? remainingTime / 1000 : 0);
-
-          setLatestTimespan({
-            start: newMessage.startDateTime,
-            end: newMessage.endDateTime,
-          });
-
-          sessionStorage.setItem(`planType_${currentExpertId}`, receivedPlanType);
-          setPlanType(receivedPlanType);
-        }
-      }
-    });
-
-    connection.on('LoadPreviousMessages', (messages) => {
-      const filteredMessages = messages.filter(msg => msg.content !== '1' && msg.content !== '20');
-      const formattedMessages = filteredMessages.map(message => ({
-        user: message.sender,
-        message: message.content,
-        timestamp: new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }));
-
-      setMessages(formattedMessages);
-      setConversations((prevConversations) => {
-        const updatedConversations = { ...prevConversations };
-        formattedMessages.forEach(msg => {
-          if (!updatedConversations[msg.user]) {
-            updatedConversations[msg.user] = [];
-          }
-          updatedConversations[msg.user].push({ sender: msg.user, text: msg.message, timestamp: msg.timestamp });
-        });
-        return updatedConversations;
-      });
-      setLoading(false);
-    });
-
-    connection.onreconnecting(() => {
-      setConnectionStatus('Reconnecting...');
-    });
-
-    connection.onreconnected(() => {
-      setConnectionStatus('Connected!');
-    });
-
-    connection.onclose(async () => {
-      setConnectionStatus('Disconnected. Reconnecting...');
-      setTimeout(() => startConnection(username, receiver), 5000);
-    });
-
-    try {
-      await connection.start();
-      setConnectionStatus('Connected!');
-      connectionRef.current = connection;
-    } catch (err) {
-      setConnectionStatus('Connection failed.');
-      setTimeout(() => startConnection(username, receiver), 5000);
-    }
-  };
-
-  const fetchPlanDetails = async () => {
-    try {
-      const storedUserId = sessionStorage.getItem('userId');
-      const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${storedUserId}`);
-      if (response.data.isSuccess) {
-        setPlanDetails(response.data.data);
-        setShowPlanPopup(true);
-      }
-    } catch (error) {
-      console.error('Error fetching plan details:', error);
-    }
-  };
-
-  const handleSendMessage = async (message) => {
-    const receiver = selectedContact.email;
-
-    let currentPlanId = planId || sessionStorage.getItem(`planId_${expertId}`); 
-    let currentPaidPlanId = paidPlanId || sessionStorage.getItem(`paidPlanId_${expertId}`);
-    const storedUserId = sessionStorage.getItem('userId'); 
-    
-    if (!storedUserId) {
-      console.error('UserId is missing!');
-      return;
-    }
-
-    if (connectionRef.current && connectionRef.current.state === signalR.HubConnectionState.Connected) {
-      try {
-        if (planType === "D") {
-          currentPlanId = storedUserId;
-          currentPaidPlanId = storedUserId;
-        }
-
-        await connectionRef.current.invoke('SendMessage', username, receiver, message.text, planType, currentPlanId, currentPaidPlanId);
-
-        const newMessage = {
-          user: username,
-          message: message.text,
-          receiver: receiver,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          planType: planType,
-          planId: currentPlanId,
-          paidPlanId: currentPaidPlanId
-        };
-        console.log(newMessage);
-
-        setMessages((prevMessages) => [...prevMessages, newMessage]);
-        setConversations((prevConversations) => ({
-          ...prevConversations,
-          [receiver]: [...(prevConversations[receiver] || []), newMessage],
-        }));
-
-      } catch (err) {
-        console.error('Error sending message:', err.toString());
-      }
-    } else {
-      setConnectionStatus('Not connected. Please try again.');
-    }
-  };
-
-  const handleSelectPlan = (duration, id, selectedPlanType) => {
-    setPlanType(selectedPlanType);
-
-    if (selectedPlanType === 'D') {
-      const storedUserId = sessionStorage.getItem('userId');
-      setPlanId(storedUserId);
-      setPaidPlanId(storedUserId);
-      sessionStorage.setItem(`planId_${currentExpertId}`, storedUserId);
-      sessionStorage.setItem(`paidPlanId_${currentExpertId}`, storedUserId);
-    } else if (selectedPlanType === 'F') {
-      setPlanId(id); 
-      setPaidPlanId(id);
-      sessionStorage.setItem(`planId_${currentExpertId}`, id);
-      sessionStorage.setItem(`paidPlanId_${currentExpertId}`, id);
-    } else if (selectedPlanType === 'P') {
-      setPlanId(id);
-      const newPaidPlanId = uuidv4();
-      setPaidPlanId(newPaidPlanId);
-      sessionStorage.setItem(`planId_${currentExpertId}`, id);
-      sessionStorage.setItem(`paidPlanId_${currentExpertId}`, newPaidPlanId);
-    }
-
-    sessionStorage.setItem(`planType_${currentExpertId}`, selectedPlanType);
-  };
-
-  const selectUser = async (contact) => {
-    setMessages(conversations[contact.email] || []);
-    setLoading(true);
-    setExpertId(contact.expertsId);
-    setCurrentExpertId(contact.expertsId);
-    sessionStorage.setItem('expertId', contact.expertsId);
-
-    startConnection(username, contact.email);
-    setSelectedContact(contact);
-    setUnreadMessages((prevUnread) => ({
-      ...prevUnread,
-      [contact.email]: 0
-    }));
-  };
-
-  useEffect(() => {
-    if (latestTimespan && expertId === currentExpertId) {
-      sessionStorage.setItem(`latestTimespan_${expertId}`, JSON.stringify(latestTimespan));
-    }
-
-    if (timer !== null && expertId === currentExpertId) {
-      sessionStorage.setItem(`timer_${expertId}`, timer);
-      sessionStorage.setItem('isTimerRunning', 'true');
-    } else {
-      sessionStorage.removeItem('isTimerRunning');
-    }
-  }, [latestTimespan, timer, expertId, currentExpertId]);
-
-  const handleBack = () => {
-    goBackToChatList();
-  };
-
-  useEffect(() => {
-    if (latestTimespan && timer !== null && expertId === currentExpertId) {
-      const now = new Date();
-      const endTime = new Date(latestTimespan.end);
-      const timeRemaining = endTime - now;
-      if (timeRemaining > 0) {
-        setTimer(timeRemaining / 1000);
-      } else {
-        handleExpiredTimer(expertId);
-      }
-    }
-  }, [selectedContact]);
-
-  const onShowPlanDetails = () => {
-    fetchPlanDetails();
-  };
+import React, { useState, useEffect } from "react";
+import { logo, sebi, loadingGif, chatIcon } from "../assets";
+import { IoMdSearch } from "react-icons/io";
+import axios from "axios";
+import { useNavigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
+
+const ContactItem = ({
+  contact,
+  unreadCount,
+  onSelectContact,
+  getExpertType,
+  activeTab,
+  premiumPrice,
+  hasUsedPlanD // Check if user has used Plan D
+}) => {
+  const contactImage =
+    activeTab === "Chats" ? contact.img : contact.expertImagePath;
 
   return (
-    <div className="flex h-screen">
-      <div className={`flex-col w-full md:w-1/3 bg-[#18181B] text-white overflow-y-auto ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
-        <ChatList 
-          contacts={contacts} 
-          onSelectContact={selectUser} 
-          conversations={conversations} 
-          unreadMessages={unreadMessages} 
-          loading={loadingContacts}
-          setPlanType={setPlanType}
-          setLatestTimespan={setLatestTimespan}
-        />
+    <div
+      className={`relative mx-3 flex flex-col items-center p-4 cursor-pointer bg-[#fff] hover:bg-gray-100 border-[#00000021] transition duration-200 mb-4 border-2 rounded-3xl`}
+      onClick={() => onSelectContact(contact)}
+    >
+      <div className="flex flex-row justify-between items-center w-full">
+        <img src={sebi} alt="" className="w-10 ml-3" />
+        <p className="text-[13px] text-gray-600">{contact.sebiRegNo}</p>
       </div>
-      <div className={`flex-col w-full bg-[#06030E] md:w-2/3 ${selectedContact ? 'flex' : 'hidden md:flex'} border-l-[1px] border-[#ffffff48]`}>
-        <AnimatePresence>
-          {selectedContact ? (
-            <ChatArea
-              key={expertId} 
-              username={username}
-              userImage={userImage}
-              selectedContact={selectedContact}
-              messages={messages}
-              onSendMessage={handleSendMessage}
-              onBack={handleBack}
-              loading={loading}
-              expertId={expertId}
-              connectionStatus={connectionStatus}
-              startEndTime={latestTimespan}
-              onShowPlanDetails={onShowPlanDetails}
-              timer={timer}
-              showFreePlanPopup={showFreePlanPopup}
-              showPremiumPlanPopup={showPremiumPlanPopup}
-              freePlanDuration={freePlanDuration}
-              premiumPlans={premiumPlans}
-              handleSelectPlan={handleSelectPlan}
-              closePlanPopups={closePlanPopups}
-            />
-          ) : (
-            <motion.div
-              key="logo"
-              className="flex justify-center items-center h-full bg-[#f0f0f0]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <img src={logo} alt="Logo" />
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div className="flex flex-row justify-between items-center w-full">
+        <img
+          src={contactImage}
+          alt={contact.name}
+          className="w-16 h-16 rounded-full border-[1px] border-[#00000053] bg-gray-200"
+        />
+        <div className="flex-1">
+          <div className="text-gray-600 text-sm flex flex-row justify-between">
+            <div className="flex flex-col">
+              <span className="text-gray-800 text-[20px] font-semibold ml-3 font-poppins">
+                {contact.channelName}
+              </span>
+              <p className="font-semibold ml-3 font-poppins text-[#24243f92]">
+                {contact.name}
+              </p>
+              <div className="flex gap-2 ml-3">
+                {premiumPrice ? (
+                  hasUsedPlanD ? (
+                    <p className="text-[17px] font-bold">
+                      ₹{premiumPrice}/min
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[17px] font-bold line-through">
+                        ₹{premiumPrice}/min
+                      </p>
+                      <span className="text-gradient-2 font-bold text-[17px]">
+                        FREE
+                      </span>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <p className="text-[17px] font-bold line-through">₹10/min</p>
+                    <span className="text-gradient-2 font-bold text-[17px]">
+                      FREE
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col items-end justify-evenly">
+              <button
+                className="border-2 border-[#00ACFF] bg-[#00aaff19] text-[#00ACFF] hover:text-white font-semibold font-poppins text-[17px] flex items-center transition-all py-4 px-4 rounded-[1.2rem]"
+                onClick={() => onSelectContact(contact)}
+              >
+                <img src={chatIcon} alt="" className="w-6 mr-3" />
+                Chat
+              </button>
+              {unreadCount > 0 && (
+                <div className="absolute top-0 right-0 mt-2 mr-2 bg-red-500 text-white text-xs rounded-full px-2 py-1">
+                  {unreadCount}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-      {showPlanPopup && (
-        <PlanPopup 
-          planDetails={planDetails}
-          userId={userId} 
-          expertId={expertId} 
-          onClose={() => setShowPlanPopup(false)} 
-          hasUsedD={hasUsedPlanD} 
-        />
-      )}
-      {showFreePlanPopup && freePlanDuration && (
-        <FreePlanPopup 
-          freePlan={{ duration: freePlanDuration, id: planId }}
-          onSelectPlan={handleSelectPlan}
-          onClose={() => setShowFreePlanPopup(false)} 
-        />
-      )}
-      {showPremiumPlanPopup && premiumPlans.length > 0 && (
-        <PremiumPlanPopup 
-          plans={premiumPlans} 
-          onSelectPlan={handleSelectPlan}
-          onClose={closePlanPopups}
-          onBackToChatList={goBackToChatList}
-        />
-      )}
     </div>
   );
 };
 
-export default ChatApp;
+const ChatList = ({
+  contacts,
+  onSelectContact,
+  conversations,
+  unreadMessages,
+  loading,
+  setPlanType,
+  setLatestTimespan,
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("Experts");
+  const [chatListHeight, setChatListHeight] = useState(window.innerHeight);
+  const [experts, setExperts] = useState([]);
+  const [loadingExperts, setLoadingExperts] = useState(true);
+  const [contactsData, setContactsData] = useState(contacts);
+  const [premiumPrices, setPremiumPrices] = useState({}); // Store premium prices
+  const [usedPlanD, setUsedPlanD] = useState({}); // Store which experts have plan D used
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getExpertType = (typeId) => {
+    switch (typeId) {
+      case 1:
+        return "Commodity";
+      case 2:
+        return "Equity";
+      case 3:
+        return "Futures & Options";
+      default:
+        return "Unknown";
+    }
+  };
+
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
+    setSearchTerm(""); // Clear the search term when switching tabs
+  };
+
+  const truncateMessage = (message, maxLength = 30) => {
+    if (!message) return "";
+    return message.length > maxLength
+      ? `${message.slice(0, maxLength)}...`
+      : message;
+  };
+
+  useEffect(() => {
+    const updateChatListHeight = () => {
+      setChatListHeight(window.innerHeight);
+    };
+
+    window.addEventListener("resize", updateChatListHeight);
+    return () => window.removeEventListener("resize", updateChatListHeight);
+  }, []);
+
+  useEffect(() => {
+    const fetchExperts = async () => {
+      setLoadingExperts(true);
+      try {
+        const response = await axios.get(
+          "https://copartners.in:5132/api/Experts?page=1&pageSize=1000"
+        );
+        if (response.data.isSuccess) {
+          const fetchedExperts = response.data.data.filter(
+            (expert) => expert.isChatLive
+          );
+          setExperts(fetchedExperts);
+
+          // Fetch premium prices and planType D info for experts
+          const premiumPrices = await Promise.all(
+            fetchedExperts.map(async (expert) => {
+              const planResponse = await axios.get(
+                `https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expert.id}?page=1&pageSize=10`
+              );
+              const availResponse = await axios.get(
+                `https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${sessionStorage.getItem('userId')}`
+              );
+
+              let hasUsedPlanD = false;
+              if (availResponse.data.isSuccess) {
+                hasUsedPlanD = availResponse.data.data.some(
+                  (plan) => plan.planType === "D" && plan.expertsId === expert.id
+                );
+              }
+
+              setUsedPlanD((prev) => ({
+                ...prev,
+                [expert.id]: hasUsedPlanD,
+              }));
+
+              if (planResponse.data.isSuccess) {
+                const premiumPlans = planResponse.data.data.filter(
+                  (plan) => plan.planType === "P"
+                );
+                if (premiumPlans.length > 0) {
+                  const minPrice = Math.min(...premiumPlans.map((p) => p.price));
+                  return { expertId: expert.id, price: minPrice };
+                }
+              }
+              return null;
+            })
+          );
+
+          const pricesObj = premiumPrices.reduce((acc, item) => {
+            if (item) {
+              acc[item.expertId] = item.price;
+            }
+            return acc;
+          }, {});
+          setPremiumPrices(pricesObj);
+        }
+      } catch (error) {
+        console.error("Error fetching experts: ", error);
+      } finally {
+        setLoadingExperts(false);
+      }
+    };
+
+    fetchExperts();
+
+    const intervalId = setInterval(fetchExperts, 30000); // Fetch data every 30 seconds
+
+    return () => clearInterval(intervalId); // Clear interval on component unmount
+  }, []);
+
+  useEffect(() => {
+    setContactsData(contacts);
+  }, [contacts]);
+
+  const handleContactSelect = (contact) => {
+    const pathSegments = location.pathname.split("/");
+    const userId = pathSegments[1];
+    const username = pathSegments[2];
+
+    let newPath;
+    if (activeTab === "Experts") {
+      newPath = `/${userId}/${username}/${contact.id}`;
+      sessionStorage.setItem("expertId", contact.id);
+    } else {
+      newPath = `/${userId}/${username}/${contact.expertsId}`;
+      sessionStorage.setItem("expertId", contact.expertsId);
+    }
+
+    navigate(newPath);
+
+    const storedPlanType = sessionStorage.getItem(
+      `planType_${contact.expertsId}`
+    );
+    if (storedPlanType) {
+      setPlanType(storedPlanType);
+    } else {
+      setPlanType("D");
+    }
+
+    const storedTimespan = sessionStorage.getItem(
+      `timespan_${contact.expertsId}`
+    );
+    if (storedTimespan) {
+      setLatestTimespan(JSON.parse(storedTimespan));
+    } else {
+      setLatestTimespan(null);
+    }
+
+    onSelectContact(contact);
+  };
+
+  const filteredContacts =
+    activeTab === "Chats"
+      ? contactsData.filter((contact) =>
+          contact.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : experts.filter((expert) =>
+          expert.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+  return (
+    <div
+      className="relative min-h-screen bg-white"
+      style={{ height: chatListHeight }}
+    >
+      <div className="flex flex-col h-full">
+        <div className="flex flex-row justify-between items-center mb-4 px-4 py-2 mt-1">
+          <img src={logo} alt="Logo" className="w-40 h-[40px]" />
+          <motion.div
+            className="flex items-center border-[1px] rounded-full p-2 border-[#00000028] bg-gray-100"
+            initial={{ width: "40px", opacity: 0 }}
+            animate={
+              isSearchOpen
+                ? { width: "100%", opacity: 1 }
+                : { width: "40px", opacity: 1 }
+            }
+            transition={{ type: "spring", stiffness: 300 }}
+          >
+            <IoMdSearch
+              className="w-6 h-6 text-gray-600 cursor-pointer"
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+            />
+            {isSearchOpen && (
+              <input
+                type="text"
+                placeholder="Search Chats or Experts"
+                className="bg-transparent text-gray-600 focus:outline-none ml-2 flex-grow"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+              />
+            )}
+          </motion.div>
+        </div>
+        <div className="flex-grow pt-3 chat-div rounded-t-[30px] bg-[#d9d9d96c]">
+          <div className="flex justify-start gap-2 mb-4 px-4">
+            <button
+              className={`hidden px-4 py-2 ${
+                activeTab === "Chats"
+                  ? "text-[#000] font-semibold text-[1.5rem] font-poppins"
+                  : "text-gray-600"
+              }`}
+              onClick={() => handleTabClick("Chats")}
+            >
+              Chat
+            </button>
+
+            <button
+              className={`hidden px-4 border py-2 rounded-[10px] ${
+                activeTab === "WaitList"
+                  ? "bg-[#000] text-[#fff]"
+                  : "bg-transparent text-gray-600 border-[#000]"
+              }`}
+              onClick={() => handleTabClick("WaitList")}
+            >
+              WaitList
+            </button>
+            <button
+              className={` px-4 py-2 rounded-[10px] ${
+                activeTab === "Experts"
+                  ? "text-[#000] font-semibold text-[1.5rem] font-poppins"
+                  : "text-gray-600"
+              }`}
+              onClick={() => handleTabClick("Experts")}
+            >
+              Experts
+            </button>
+          </div>
+          {activeTab === "Chats" &&
+            (loading ? (
+              <div className="flex flex-col justify-center items-center h-full">
+                <img src={loadingGif} alt="Loading..." className="w-16 h-16" />
+                <h1 className="text-gray-700 text-lg">Loading...</h1>
+              </div>
+            ) : (
+              <div className="overflow-y-auto h-[calc(100vh-200px)] md:h-[calc(100vh-150px)] bg-transparent">
+                {filteredContacts.map((contact, index) => {
+                  const lastMessage =
+                    conversations[contact.name]?.slice(-1)[0] || {};
+                  const truncatedMessage = truncateMessage(
+                    lastMessage.sender === "You"
+                      ? `You: ${lastMessage.text}`
+                      : lastMessage.text
+                  );
+                  const unreadCount = unreadMessages[contact.email] || 0;
+
+                  return (
+                    <ContactItem
+                      key={index}
+                      contact={contact}
+                      unreadCount={unreadCount}
+                      onSelectContact={handleContactSelect}
+                      getExpertType={getExpertType}
+                      activeTab={activeTab}
+                      premiumPrice={premiumPrices[contact.expertsId] || null} // Pass the premium price to the ContactItem
+                      hasUsedPlanD={usedPlanD[contact.expertsId]} // Pass if planType D was used for the expert
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          {activeTab === "WaitList" && (
+            <div className="overflow-y-auto h-[calc(100vh-200px)] md:h-[calc(100vh-150px)]">
+              {experts.map((expert, index) => (
+                <ContactItem
+                  key={index}
+                  contact={expert}
+                  unreadCount={0}
+                  onSelectContact={handleContactSelect}
+                  getExpertType={getExpertType}
+                  activeTab={activeTab}
+                  premiumPrice={premiumPrices[expert.id] || null} // Pass the premium price to the ContactItem
+                  hasUsedPlanD={usedPlanD[expert.id]} // Pass if planType D was used for the expert
+                />
+              ))}
+            </div>
+          )}
+          {activeTab === "Experts" && (
+            <div className="overflow-y-auto h-[calc(100vh-200px)] md:h-[calc(100vh-150px)]">
+              {filteredContacts.map((expert, index) => (
+                <ContactItem
+                  key={index}
+                  contact={expert}
+                  unreadCount={0}
+                  onSelectContact={handleContactSelect}
+                  getExpertType={getExpertType}
+                  activeTab={activeTab}
+                  premiumPrice={premiumPrices[expert.id] || null} // Pass the premium price to the ContactItem
+                  hasUsedPlanD={usedPlanD[expert.id]} // Pass if planType D was used for the expert
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ChatList;
