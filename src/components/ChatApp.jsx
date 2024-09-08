@@ -37,6 +37,30 @@ const ChatApp = () => {
   const [latestTimespan, setLatestTimespan] = useState(null);
   const [planType, setPlanType] = useState('D');
   const [timer, setTimer] = useState(null);
+  const [currentExpertId, setCurrentExpertId] = useState(null);
+  const [hasUsedPlanD, setHasUsedPlanD] = useState(false); // Track if user has used PlanType D with any expert
+
+  const closePlanPopups = () => {
+    setShowFreePlanPopup(false);
+    setShowPremiumPlanPopup(false);
+  };
+
+  const goBackToChatList = () => {
+    closePlanPopups();
+    setSelectedContact(null);
+  };
+
+  const handleExpiredTimer = (expertId) => {
+    if (expertId !== currentExpertId) return;
+
+    console.log("Timer expired, refreshing the page...");
+    setTimer(null);
+
+    sessionStorage.removeItem(`timer_${expertId}`);
+    sessionStorage.removeItem('isTimerRunning');
+
+    window.location.reload();
+  };
 
   useEffect(() => {
     const pathSegments = location.pathname.split('/');
@@ -44,18 +68,31 @@ const ChatApp = () => {
     const potentialUsername = pathSegments[2];
     const expertIdFromPath = pathSegments[3];
 
-    const storedTimespan = sessionStorage.getItem('latestTimespan');
-    const storedTimer = sessionStorage.getItem('timer');
+    if (expertIdFromPath) {
+      setCurrentExpertId(expertIdFromPath);
+      setExpertId(expertIdFromPath);
+      sessionStorage.setItem('expertId', expertIdFromPath);
+    }
+
+    const resetTimerAndTimespan = () => {
+      setTimer(null);
+      setLatestTimespan(null);
+    };
+
+    resetTimerAndTimespan();
+
+    const storedTimespan = sessionStorage.getItem(`timespan_${expertIdFromPath}`);
+    const storedTimer = sessionStorage.getItem(`timer_${expertIdFromPath}`);
     const storedPlanType = sessionStorage.getItem(`planType_${expertIdFromPath}`);
-  
+
     if (storedTimespan) {
       setLatestTimespan(JSON.parse(storedTimespan));
     }
-  
+
     if (storedTimer) {
       setTimer(parseInt(storedTimer, 10));
     }
-  
+
     if (storedPlanType) {
       setPlanType(storedPlanType);
     }
@@ -63,40 +100,25 @@ const ChatApp = () => {
     if (potentialUserId) {
       setUserId(potentialUserId);
       sessionStorage.setItem('userId', potentialUserId);
-      setPlanId(potentialUserId);
-      setPaidPlanId(potentialUserId);
     } else {
       console.error('Invalid userId in URL path');
-      return;
     }
 
     if (potentialUsername && /^[0-9]{10}$/.test(potentialUsername)) {
       setUsername(potentialUsername);
     } else {
       console.error('Invalid username in URL path');
-      return;
-    }
-
-    if (expertIdFromPath) {
-      setExpertId(expertIdFromPath);
-      sessionStorage.setItem('expertId', expertIdFromPath);
-    } else {
-      console.error('Invalid expertId in URL path');
-      return;
     }
 
     const fetchUserImage = async () => {
-      const userImg = 'https://example.com/path-to-user-image.jpg'; // Replace with the actual image URL
+      const userImg = 'https://example.com/path-to-user-image.jpg';
       setUserImage(userImg);
     };
-
-    
-    
 
     const fetchContacts = async () => {
       setLoadingContacts(true);
       try {
-        const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatUsersById/${potentialUserId}`);
+        const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatUsersById/${potentialUserId}`);
         if (response.data.isSuccess) {
           const filteredUsers = response.data.data.filter(user => user.userType === 'RA');
           const fetchedContacts = await Promise.all(filteredUsers.map(async (user) => {
@@ -149,103 +171,99 @@ const ChatApp = () => {
       }
     };
 
-    
-
     const fetchTimespan = async (userId, expertId) => {
+      setLoading(true);
       try {
-        const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatAvailUser/${userId}`);
+        const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${userId}`);
         if (response.data.isSuccess) {
-          const plans = response.data.data;
-          const latestPlan = plans.reduce((latest, plan) => {
-            const planEndTime = new Date(plan.endTime);
-            return planEndTime > new Date(latest.endTime) ? plan : latest;
-          }, plans[0]);
-    
-          const now = new Date();
-          const endTime = new Date(latestPlan.endTime);
-    
-          const isD = plans.some(plan => plan.planType === 'D');
-          const isF = plans.find(plan => plan.planType === 'F');
-          const isP = plans.some(plan => plan.planType === 'P');
-    
-          console.log("Now:", now);
-          console.log("End Time:", endTime);
-          console.log("isD:", isD);
-          console.log("isF:", isF);
-          console.log("isP:", isP);
-    
-          if (isF) {
-            const createdOn = new Date(isF.createdOn);
-            console.log("Free Plan Created On:", createdOn);
-            if (
-              createdOn.toDateString() === now.toDateString() &&
-              now >= endTime
-            ) {
-              // FreePlanPopup should be shown for today's date
-              console.log("Showing FreePlanPopup");
-              setShowFreePlanPopup(true);
-              setShowPremiumPlanPopup(false);
-            } else if (now >= endTime) {
-              // Time is up, and there's no valid FreePlan for today, so show PremiumPlanPopup
-              console.log("FreePlan not valid for today. Showing PremiumPlanPopup");
-              setShowFreePlanPopup(false);
-              setShowPremiumPlanPopup(true);
+          const plans = response.data.data.filter(plan => plan.expertsId === expertId);
+          if (plans.length > 0) {
+            const latestPlan = plans.reduce((latest, plan) => {
+              const planEndTime = new Date(plan.endTime);
+              return planEndTime > new Date(latest.endTime) ? plan : latest;
+            }, plans[0]);
+
+            const now = new Date();
+            const endTime = new Date(latestPlan.endTime);
+            const timeRemaining = endTime - now;
+
+            if (timeRemaining > 0) {
+              setLatestTimespan({
+                start: latestPlan.startTime,
+                end: latestPlan.endTime,
+              });
+              setTimer(timeRemaining / 1000);
+              sessionStorage.setItem(`timer_${expertId}`, timeRemaining / 1000);
+              sessionStorage.setItem(`timespan_${expertId}`, JSON.stringify({
+                start: latestPlan.startTime,
+                end: latestPlan.endTime,
+              }));
+            } else {
+              handleExpiredTimer(expertId);
             }
-          } else if (isD && !isF && !isP && now >= endTime) {
-            console.log("Showing FreePlanPopup");
-            setShowFreePlanPopup(true);
-            setShowPremiumPlanPopup(false);
-          } else if ((isD && (isF || isP)) && now >= endTime) {
-            console.log("Showing PremiumPlanPopup");
-            setShowFreePlanPopup(false);
-            setShowPremiumPlanPopup(true);
-          } else if (isP && now >= endTime) {
-            console.log("Showing PremiumPlanPopup since end time is reached");
-            setShowFreePlanPopup(false);
-            setShowPremiumPlanPopup(true);
           } else {
-            console.log("No valid plans to show a popup");
-            setShowFreePlanPopup(false);
-            setShowPremiumPlanPopup(false);
+            handleExpiredTimer(expertId);
           }
-    
-          const timeRemaining = endTime - now;
-          setTimer(timeRemaining > 0 ? timeRemaining / 1000 : 0);
-        } else {
-          console.log("No plans found, hiding all popups.");
-          setShowFreePlanPopup(false);
-          setShowPremiumPlanPopup(false);
         }
       } catch (error) {
         console.error('Error fetching timespan:', error);
+      } finally {
+        setLoading(false);
       }
     };
-    
-   
-   
+
     const fetchPlans = async (userId, expertId) => {
       try {
-          const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
-          if (response.data.isSuccess) {
-              const freePlan = response.data.data.find(plan => plan.planType === 'F');
-              const premiumPlans = response.data.data.filter(plan => plan.planType === 'P');
-              
-              if (freePlan) {
-                  setFreePlanDuration(freePlan.duration);
-                  if (planType !== 'D') {
-                      setPlanId(freePlan.id);  // Set the planId to the id of the free plan only if not 'D'
-                  }
-              }
-              
-              if (premiumPlans.length > 0) {
-                  setPremiumPlans(premiumPlans);
-              }
-          }
-      } catch (error) {
-          console.error('Error fetching plans:', error);
-      }
-  };
+        const chatAvailResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${userId}`);
+        if (chatAvailResponse.data.isSuccess) {
+          const chatPlans = chatAvailResponse.data.data.filter(plan => plan.expertsId === expertId);
+          const hasUsedD = chatPlans.some(plan => plan.planType === 'D');
+          const hasUsedF = chatPlans.some(plan => plan.planType === 'F');
 
+          const expertPlansResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
+          if (expertPlansResponse.data.isSuccess) {
+            const expertPlans = expertPlansResponse.data.data;
+            const premiumPlans = expertPlans.filter(plan => plan.planType === 'P');
+            setPremiumPlans(premiumPlans);
+
+            const freePlan = expertPlans.find(plan => plan.planType === 'F');
+            if (freePlan) {
+              setFreePlanDuration(freePlan.duration || 2);
+              setPlanId(freePlan.id);  
+            }
+
+            const isTimerRunning = sessionStorage.getItem('isTimerRunning');
+            
+            // Open the popups based on conditions, but if planType "D" has been used, open the popups directly
+            if (hasUsedPlanD) {
+              if (freePlan) {
+                setShowFreePlanPopup(true);
+                setShowPremiumPlanPopup(false);
+              } else if (premiumPlans.length > 0) {
+                setShowPremiumPlanPopup(true);
+                setShowFreePlanPopup(false);
+              }
+            } else if (!isTimerRunning) {
+              if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
+                setShowPremiumPlanPopup(true);
+                setShowFreePlanPopup(false);
+              } else if (!freePlan && hasUsedD) {
+                setShowPremiumPlanPopup(true);
+                setShowFreePlanPopup(false);
+              } else if (hasUsedD && freePlan) {
+                setShowFreePlanPopup(true);
+                setShowPremiumPlanPopup(false);
+              } else if (premiumPlans.length > 0) {
+                setShowPremiumPlanPopup(false);
+                setShowFreePlanPopup(false);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching plan data:', error);
+      }
+    };
 
     fetchUserImage();
     fetchContacts().then(() => {
@@ -254,104 +272,115 @@ const ChatApp = () => {
       }
     });
 
-  }, [location.pathname, planType]);
+    // Check if user has used planType D with any expert and set `hasUsedPlanD` accordingly
+    const checkPlanTypeD = async () => {
+      try {
+        const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${potentialUserId}`);
+        if (response.data.isSuccess) {
+          const hasUsedD = response.data.data.some(plan => plan.planType === 'D');
+          if (hasUsedD) {
+            setHasUsedPlanD(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking PlanType D:', error);
+      }
+    };
+
+    checkPlanTypeD();
+  }, [location.pathname]);
 
   useEffect(() => {
     let intervalId;
     let startTime = Date.now();
-  
+
     const checkAndRefresh = () => {
       if (timer !== null && timer > 0) {
         const elapsedTime = (Date.now() - startTime) / 1000;
         const newTimer = timer - elapsedTime;
-  
+
         if (newTimer <= 0) {
-          setTimer(0);
-          window.location.reload(); // Auto-refresh when the timer is up
+          handleExpiredTimer(currentExpertId);
         } else {
           setTimer(newTimer);
-          startTime = Date.now(); // Reset start time for accurate timer updates
+          startTime = Date.now();
         }
       }
     };
-  
+
     intervalId = setInterval(checkAndRefresh, 1000);
-  
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (timer !== null && timer <= 0) {
-          window.location.reload(); // Refresh the page when the tab becomes visible again and time is up
+          handleExpiredTimer(currentExpertId);
         } else {
-          checkAndRefresh(); // Ensure the timer is updated immediately when returning to the tab
+          checkAndRefresh();
         }
       }
     };
-  
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-  
+
     return () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [timer]);
-  
-  
-  
+  }, [timer, currentExpertId]);
 
   const startConnection = async (username, receiver) => {
-    console.log('Starting connection...');
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`https://copartners.in/FeaturesService/chathub?username=${encodeURIComponent(username)}&chatPartnerUsername=${encodeURIComponent(receiver)}`)
+      .withUrl(`https://copartners.in:5137/chathub?username=${encodeURIComponent(username)}&chatPartnerUsername=${encodeURIComponent(receiver)}`)
       .withAutomaticReconnect([0, 2000, 10000, 30000])
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-      connection.on('ReceiveMessage', (user, message, receivedPlanType, planId, paidPlanId, startDateTime, endDateTime) => {
-        if (message !== '1' && message !== '20') {
-          const newMessage = {
-            user,
-            message,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            planType: receivedPlanType,
-            planId: planId,
-            paidPlanId: paidPlanId,
-            startDateTime: new Date(startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            endDateTime: new Date(endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    connection.on('ReceiveMessage', (user, message, receivedPlanType, planId, paidPlanId, startDateTime, endDateTime) => {
+      if (message !== '1' && message !== '20') {
+        const newMessage = {
+          user,
+          message,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          planType: receivedPlanType,
+          planId: planId,
+          paidPlanId: paidPlanId,
+          startDateTime: new Date(startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          endDateTime: new Date(endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        setMessages((prevMessages) => [...prevMessages, newMessage]);
+        setConversations((prevConversations) => ({
+          ...prevConversations,
+          [user]: [...(prevConversations[user] || []), { sender: user, text: message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
+        }));
+
+        setUnreadMessages((prevUnread) => ({
+          ...prevUnread,
+          [user]: (prevUnread[user] || 0) + 1
+        }));
+
+        if (expertId === currentExpertId) {
+          const timespan = {
+            start: startDateTime,
+            end: endDateTime,
           };
-      
-          setMessages((prevMessages) => [...prevMessages, newMessage]);
-          setConversations((prevConversations) => ({
-            ...prevConversations,
-            [user]: [...(prevConversations[user] || []), { sender: user, text: message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
-          }));
-      
-          setUnreadMessages((prevUnread) => ({
-            ...prevUnread,
-            [user]: (prevUnread[user] || 0) + 1
-          }));
-      
-          const currentExpertId = sessionStorage.getItem('expertId');
-          if (currentExpertId) {
-            const timespan = {
-              start: startDateTime,
-              end: endDateTime,
-            };
-            sessionStorage.setItem(`timespan_${currentExpertId}`, JSON.stringify(timespan));
-      
-            // Calculate and store the timer for the current expert
-            const endTime = new Date(endDateTime);
-            const remainingTime = endTime - new Date();
-            setTimer(remainingTime > 0 ? remainingTime / 1000 : 0);
-            sessionStorage.setItem(`timer_${currentExpertId}`, remainingTime > 0 ? remainingTime / 1000 : 0);
-      
-            setLatestTimespan({
-              start: newMessage.startDateTime,
-              end: newMessage.endDateTime,
-            });
-          }
+          sessionStorage.setItem(`timespan_${currentExpertId}`, JSON.stringify(timespan));
+
+          const endTime = new Date(endDateTime);
+          const remainingTime = endTime - new Date();
+          setTimer(remainingTime > 0 ? remainingTime / 1000 : 0);
+          sessionStorage.setItem(`timer_${currentExpertId}`, remainingTime > 0 ? remainingTime / 1000 : 0);
+
+          setLatestTimespan({
+            start: newMessage.startDateTime,
+            end: newMessage.endDateTime,
+          });
+
+          sessionStorage.setItem(`planType_${currentExpertId}`, receivedPlanType);
+          setPlanType(receivedPlanType);
         }
-      });
-      
+      }
+    });
 
     connection.on('LoadPreviousMessages', (messages) => {
       const filteredMessages = messages.filter(msg => msg.content !== '1' && msg.content !== '20');
@@ -384,27 +413,24 @@ const ChatApp = () => {
     });
 
     connection.onclose(async () => {
-      console.log("Disconnected from SignalR hub. Attempting to reconnect...");
       setConnectionStatus('Disconnected. Reconnecting...');
-      setTimeout(() => startConnection(username, receiver), 5000); // Retry connection after 5 seconds
+      setTimeout(() => startConnection(username, receiver), 5000);
     });
 
     try {
       await connection.start();
-      console.log('Connected to the SignalR hub!');
       setConnectionStatus('Connected!');
       connectionRef.current = connection;
     } catch (err) {
-      console.error('Error starting connection: ', err.toString());
       setConnectionStatus('Connection failed.');
-      setTimeout(() => startConnection(username, receiver), 5000); // Retry connection after 5 seconds
+      setTimeout(() => startConnection(username, receiver), 5000);
     }
   };
 
   const fetchPlanDetails = async () => {
     try {
       const storedUserId = sessionStorage.getItem('userId');
-      const response = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatAvailUser/${storedUserId}`);
+      const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${storedUserId}`);
       if (response.data.isSuccess) {
         setPlanDetails(response.data.data);
         setShowPlanPopup(true);
@@ -417,68 +443,79 @@ const ChatApp = () => {
   const handleSendMessage = async (message) => {
     const receiver = selectedContact.email;
 
+    let currentPlanId = planId || sessionStorage.getItem(`planId_${expertId}`); 
+    let currentPaidPlanId = paidPlanId || sessionStorage.getItem(`paidPlanId_${expertId}`);
+    const storedUserId = sessionStorage.getItem('userId'); 
+    
+    if (!storedUserId) {
+      console.error('UserId is missing!');
+      return;
+    }
+
     if (connectionRef.current && connectionRef.current.state === signalR.HubConnectionState.Connected) {
       try {
-        await connectionRef.current.invoke('SendMessage', username, receiver, message.text, planType, planId, paidPlanId);
+        if (planType === "D") {
+          currentPlanId = storedUserId;
+          currentPaidPlanId = storedUserId;
+        }
+
+        await connectionRef.current.invoke('SendMessage', username, receiver, message.text, planType, currentPlanId, currentPaidPlanId);
+
         const newMessage = {
           user: username,
           message: message.text,
           receiver: receiver,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           planType: planType,
-          planId: planId,
-          paidPlanId: paidPlanId
+          planId: currentPlanId,
+          paidPlanId: currentPaidPlanId
         };
+        console.log(newMessage);
+
         setMessages((prevMessages) => [...prevMessages, newMessage]);
         setConversations((prevConversations) => ({
           ...prevConversations,
           [receiver]: [...(prevConversations[receiver] || []), newMessage],
         }));
 
-        console.log(`Message sent with planType: ${planType}, planId: ${planId}, paidPlanId: ${paidPlanId}`);
       } catch (err) {
         console.error('Error sending message:', err.toString());
       }
     } else {
-      console.log("Cannot send data if the connection is not in the 'Connected' state.");
       setConnectionStatus('Not connected. Please try again.');
     }
   };
-  
 
   const handleSelectPlan = (duration, id, selectedPlanType) => {
     setPlanType(selectedPlanType);
-  
+
     if (selectedPlanType === 'D') {
       const storedUserId = sessionStorage.getItem('userId');
-      setPlanId(storedUserId);  // Use the userId stored in sessionStorage
+      setPlanId(storedUserId);
       setPaidPlanId(storedUserId);
+      sessionStorage.setItem(`planId_${currentExpertId}`, storedUserId);
+      sessionStorage.setItem(`paidPlanId_${currentExpertId}`, storedUserId);
     } else if (selectedPlanType === 'F') {
-      setPlanId(id);  // Use the ID passed to this function, which is the free plan's ID
+      setPlanId(id); 
       setPaidPlanId(id);
+      sessionStorage.setItem(`planId_${currentExpertId}`, id);
+      sessionStorage.setItem(`paidPlanId_${currentExpertId}`, id);
     } else if (selectedPlanType === 'P') {
       setPlanId(id);
-      setPaidPlanId(uuidv4());
-      if (!showPremiumPlanPopup) {
-        setShowPremiumPlanPopup(true);
-      }
+      const newPaidPlanId = uuidv4();
+      setPaidPlanId(newPaidPlanId);
+      sessionStorage.setItem(`planId_${currentExpertId}`, id);
+      sessionStorage.setItem(`paidPlanId_${currentExpertId}`, newPaidPlanId);
     }
-  
-    // Save the planType for the current expert in sessionStorage
-    const currentExpertId = sessionStorage.getItem('expertId');
-    if (currentExpertId) {
-      sessionStorage.setItem(`planType_${currentExpertId}`, selectedPlanType);
-    }
-  
-    console.log(`Selected plan with type ${selectedPlanType} and ID ${id}`);
-  };
-  
 
+    sessionStorage.setItem(`planType_${currentExpertId}`, selectedPlanType);
+  };
 
   const selectUser = async (contact) => {
     setMessages(conversations[contact.email] || []);
     setLoading(true);
     setExpertId(contact.expertsId);
+    setCurrentExpertId(contact.expertsId);
     sessionStorage.setItem('expertId', contact.expertsId);
 
     startConnection(username, contact.email);
@@ -490,35 +527,31 @@ const ChatApp = () => {
   };
 
   useEffect(() => {
-    if (latestTimespan) {
-      // Persist the latest timespan in sessionStorage
-      sessionStorage.setItem('latestTimespan', JSON.stringify(latestTimespan));
+    if (latestTimespan && expertId === currentExpertId) {
+      sessionStorage.setItem(`latestTimespan_${expertId}`, JSON.stringify(latestTimespan));
     }
-  
-    if (timer !== null) {
-      // Persist the timer in sessionStorage
-      sessionStorage.setItem('timer', timer);
+
+    if (timer !== null && expertId === currentExpertId) {
+      sessionStorage.setItem(`timer_${expertId}`, timer);
+      sessionStorage.setItem('isTimerRunning', 'true');
+    } else {
+      sessionStorage.removeItem('isTimerRunning');
     }
-  }, [latestTimespan, timer]);
-  
+  }, [latestTimespan, timer, expertId, currentExpertId]);
 
   const handleBack = () => {
-    setSelectedContact(null);
+    goBackToChatList();
   };
 
   useEffect(() => {
-    if (latestTimespan && timer !== null) {
+    if (latestTimespan && timer !== null && expertId === currentExpertId) {
       const now = new Date();
       const endTime = new Date(latestTimespan.end);
       const timeRemaining = endTime - now;
       if (timeRemaining > 0) {
         setTimer(timeRemaining / 1000);
       } else {
-        setTimer(0);
-        if (showFreePlanPopup) {
-          setShowFreePlanPopup(false);
-          setShowPremiumPlanPopup(true);
-        }
+        handleExpiredTimer(expertId);
       }
     }
   }, [selectedContact]);
@@ -530,20 +563,21 @@ const ChatApp = () => {
   return (
     <div className="flex h-screen">
       <div className={`flex-col w-full md:w-1/3 bg-[#18181B] text-white overflow-y-auto ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
-      <ChatList 
-        contacts={contacts} 
-        onSelectContact={selectUser} 
-        conversations={conversations} 
-        unreadMessages={unreadMessages} 
-        loading={loadingContacts}
-        setPlanType={setPlanType} // Pass setPlanType as a prop to ChatList
-        setLatestTimespan={setLatestTimespan} // Pass setLatestTimespan as a prop to ChatList
-      />
+        <ChatList 
+          contacts={contacts} 
+          onSelectContact={selectUser} 
+          conversations={conversations} 
+          unreadMessages={unreadMessages} 
+          loading={loadingContacts}
+          setPlanType={setPlanType}
+          setLatestTimespan={setLatestTimespan}
+        />
       </div>
       <div className={`flex-col w-full bg-[#06030E] md:w-2/3 ${selectedContact ? 'flex' : 'hidden md:flex'} border-l-[1px] border-[#ffffff48]`}>
         <AnimatePresence>
           {selectedContact ? (
             <ChatArea
+              key={expertId} 
               username={username}
               userImage={userImage}
               selectedContact={selectedContact}
@@ -561,12 +595,8 @@ const ChatApp = () => {
               freePlanDuration={freePlanDuration}
               premiumPlans={premiumPlans}
               handleSelectPlan={handleSelectPlan}
-              closePlanPopups={() => {
-                setShowFreePlanPopup(false);
-                setShowPremiumPlanPopup(false);
-              }}
+              closePlanPopups={closePlanPopups}
             />
-
           ) : (
             <motion.div
               key="logo"
@@ -582,10 +612,11 @@ const ChatApp = () => {
       </div>
       {showPlanPopup && (
         <PlanPopup 
-          planDetails={planDetails} 
+          planDetails={planDetails}
           userId={userId} 
           expertId={expertId} 
           onClose={() => setShowPlanPopup(false)} 
+          hasUsedD={hasUsedPlanD} 
         />
       )}
       {showFreePlanPopup && freePlanDuration && (
@@ -599,7 +630,8 @@ const ChatApp = () => {
         <PremiumPlanPopup 
           plans={premiumPlans} 
           onSelectPlan={handleSelectPlan}
-          onClose={() => setShowPremiumPlanPopup(false)} 
+          onClose={closePlanPopups}
+          onBackToChatList={goBackToChatList}
         />
       )}
     </div>

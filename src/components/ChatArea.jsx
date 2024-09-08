@@ -12,6 +12,9 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [chatAreaHeight, setChatAreaHeight] = useState(window.innerHeight);
+  const [firstTimeMessage, setFirstTimeMessage] = useState(null); // First-time message from the expert
+  const [isFirstMessageSent, setIsFirstMessageSent] = useState(false); // Track if user sent the first message
+  const [sequenceMessages, setSequenceMessages] = useState([]); // Store sequence messages
   const messagesEndRef = useRef(null);
   const minutes = Math.floor(timer / 60);
   const seconds = timer % 60;
@@ -27,6 +30,12 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
       onSendMessage(message);
       setNewMessage('');
       setSelectedFile(null);
+
+      // After the first message is sent, show additional frontend messages
+      if (!isFirstMessageSent) {
+        setIsFirstMessageSent(true); // Set first message sent flag
+        displaySequenceMessages(); // Display the sequence of frontend messages
+      }
     }
   };
 
@@ -47,7 +56,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, sequenceMessages]);
 
   useEffect(() => {
     const updateChatAreaHeight = () => {
@@ -58,9 +67,53 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
     return () => window.removeEventListener('resize', updateChatAreaHeight);
   }, []);
 
+  // Show first-time message if the user has no messages yet
+  useEffect(() => {
+    if (messages.length === 0 && !firstTimeMessage) {
+      setFirstTimeMessage({
+        user: selectedContact.name,
+        message: `Hi ${username}, ${selectedContact.name} will be with you shortly.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+    }
+  }, [messages, selectedContact, username, firstTimeMessage]);
+
+  // Function to display sequence messages after the first user message
+  const displaySequenceMessages = () => {
+    const raFirstName = selectedContact.name.split(' ')[0]; // Assuming RA's first name is the first word
+
+    // Sequence of messages to show
+    const messageSequence = [
+      `Your timer will start when ${raFirstName} is here.`,
+      'Please start typing your question ….'
+    ];
+
+    // Display the sequence of messages with a delay
+    let delay = 1000; // Start with 1-second delay
+    messageSequence.forEach((message, index) => {
+      setTimeout(() => {
+        setSequenceMessages(prev => [
+          ...prev,
+          { message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+        ]);
+      }, delay);
+      delay += 2000; // Increment delay for each message
+    });
+  };
+
+  // Clear the frontend messages when the expert replies
+  useEffect(() => {
+    const expertMessage = messages.find(msg => msg.user === selectedContact.name);
+    if (expertMessage) {
+      // Reset the first-time and sequence messages once the expert replies
+      setFirstTimeMessage(null);
+      setSequenceMessages([]);
+    }
+  }, [messages, selectedContact]);
+
   return (
     <motion.div
-      className="flex flex-col relative" // Add relative positioning
+      className="flex flex-col relative"
       style={{ height: chatAreaHeight, backgroundColor: '#fff' }}
       initial={{ opacity: 0, x: 50 }}
       animate={{ opacity: 1, x: 0 }}
@@ -88,11 +141,6 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
             <div className="flex items-center">
               <h2 className="text-lg font-semibold text-gray-900">{selectedContact.name}</h2>
             </div>
-            {startEndTime && (
-              <div className="text-sm text-gray-600">
-                {`Time: ${startEndTime.start} - ${startEndTime.end}`}
-              </div>
-            )}
             {timer !== null && timer > 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -127,7 +175,8 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
           </div>
         ) : (
           <>
-            {messages.length === 0 && (
+            {/* Render the first-time message if applicable */}
+            {firstTimeMessage && (
               <motion.div
                 className="mb-4 flex justify-start items-start gap-2.5"
                 initial={{ opacity: 0, y: 20 }}
@@ -141,20 +190,41 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
                     className="w-8 h-8 rounded-full mr-2 bg-gray-200 border-[1px] border-gray-300"
                   />
                 </div>
-                <div
-                  className="flex flex-col p-2 rounded-lg shadow-md bg-gray-200 text-black rounded-tl-none"
-                  style={{ maxWidth: '75%', wordWrap: 'break-word' }}
-                >
-                  <p className="text-sm py-2.5">Hi, user start your conversation by sending Hi</p>
+                <div className="flex flex-col p-2 bg-gray-200 text-black rounded-lg shadow-md max-w-75%">
+                  <p className="text-sm py-2.5">{firstTimeMessage.message}</p>
                   <div className="flex justify-between text-black gap-2">
-                    <span className="text-[10px]">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    <span className="text-[10px] flex items-center gap-1">
-                      <MdDoneAll />
-                    </span>
+                    <span className="text-[10px]">{firstTimeMessage.timestamp}</span>
                   </div>
                 </div>
               </motion.div>
             )}
+
+            {/* Render the sequence messages */}
+            {sequenceMessages.map((seqMsg, index) => (
+              <motion.div
+                key={index}
+                className="mb-4 flex justify-start items-start gap-2.5"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center">
+                  <img
+                    src={selectedContact.img}
+                    alt={selectedContact.name}
+                    className="w-8 h-8 rounded-full mr-2 bg-gray-200 border-[1px] border-gray-300"
+                  />
+                </div>
+                <div className="flex flex-col p-2 bg-gray-200 text-black rounded-lg shadow-md max-w-75%">
+                  <p className="text-sm py-2.5">{seqMsg.message}</p>
+                  <div className="flex justify-between text-black gap-2">
+                    <span className="text-[10px]">{seqMsg.timestamp}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+
+            {/* Render the actual chat messages */}
             {messages.map((message, index) => (
               <motion.div
                 key={index}
@@ -198,7 +268,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
             ))}
           </>
         )}
-                <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} />
       </div>
       {selectedFile && (
         <div className="p-4 border-t border-gray-300 flex bg-gray-200 items-center gap-2 relative">
@@ -224,7 +294,6 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
         <button
           className="ml-2 p-2 bg-gradient-to-r from-[#0081F1] to-[#45C4D5] text-white rounded-full"
           onClick={sendMessage}
-          disabled={!newMessage.trim() && !selectedFile}
         >
           <TbMessage2Share className='text-[22px]' />
         </button>
@@ -254,4 +323,3 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
 };
 
 export default ChatArea;
-

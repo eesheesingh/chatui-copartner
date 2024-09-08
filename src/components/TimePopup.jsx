@@ -23,7 +23,7 @@ const TimerPopup = ({ expertId, onClose, onSelectPlan }) => {
         }
 
         // Fetch available plans for the expert
-        const planResponse = await axios.get(`https://copartners.in/Featuresservice/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
+        const planResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
         if (planResponse.data.isSuccess) {
           const availablePlans = planResponse.data.data;
 

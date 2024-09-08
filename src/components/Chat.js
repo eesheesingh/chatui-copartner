@@ -19,7 +19,7 @@ const Chat = () => {
 
     const startConnection = async (username) => {
         const connection = new signalR.HubConnectionBuilder()
-            .withUrl(`https://copartners.in/Featuresservice/chathub?username=${encodeURIComponent(username)}`)
+            .withUrl(`https://copartners.in:5137/chathub?username=${encodeURIComponent(username)}`)
             .withAutomaticReconnect([0, 2000, 10000, 30000])
             .configureLogging(signalR.LogLevel.Information)
             .build();

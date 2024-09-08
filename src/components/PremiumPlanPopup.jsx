@@ -1,6 +1,7 @@
 import React from 'react';
+import { AiOutlineClose } from 'react-icons/ai';
 
-const PremiumPlanPopup = ({ plans, onSelectPlan, onClose }) => {
+const PremiumPlanPopup = ({ plans, onSelectPlan, onClose, onBackToChatList }) => {
   const getExpertType = (typeId) => {
     switch (typeId) {
       case 1:
@@ -13,21 +14,29 @@ const PremiumPlanPopup = ({ plans, onSelectPlan, onClose }) => {
         return "Unknown";
     }
   };
+
   const handlePaidPlan = (plan) => {
     console.log('User has chosen the Premium plan:', plan);
     onSelectPlan(plan.duration, plan.id, 'P');
-    onClose();
+    onClose(); // This will close only the PremiumPlanPopup
+  };
+
+  const handleCloseIconClick = () => {
+    onBackToChatList(); // Trigger going back to the chat list
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-[#fff] border border-[#00000030] text-[#000] m-3 p-6 rounded-t-lg shadow-xl z-50">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold">Oh No! Your Time Is Up!</h2>
-        <p className="mt-2 text-gray-300">Select a plan to extend your time:</p>
+    <div className="fixed bottom-0 left-0 right-0 bg-white border border-gray-300 text-black m-3 p-6 rounded-t-lg shadow-xl z-50">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-center">Oh No! Your Time Is Up!</h2>
+        <button onClick={handleCloseIconClick} className="text-gray-600 hover:text-gray-800 transition-colors">
+          <AiOutlineClose size={24} />
+        </button>
       </div>
+      <p className="mt-2 text-gray-300 text-start">Select a plan to extend your time:</p>
       <ul className="mt-4 grid grid-cols-2 sm:grid-cols-2 gap-4 h-auto overflow-y-auto">
         {plans.map((plan, index) => (
-          <li key={index} className="bg-[#fff] border border-[#00000030] text-[#000] rounded-lg p-4 shadow-lg transition-transform transform hover:-translate-y-1">
+          <li key={index} className="bg-white border border-gray-300 text-black rounded-lg p-4 shadow-lg transition-transform transform hover:-translate-y-1">
             <div className="text-center">
               <h3 className="text-xl font-semibold">{plan.subscriptionType}</h3>
               <h3 className="text-2xl font-bold mt-2">₹{plan.price}</h3>

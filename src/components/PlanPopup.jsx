@@ -2,14 +2,12 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { FaRegCheckCircle, FaTimes } from 'react-icons/fa';
 
-const PlanPopup = ({ planDetails, userId, expertId, onClose }) => {
+const PlanPopup = ({ planDetails, userId, expertId, onClose, hasUsedD }) => {
   // Filter the plan details based on userId and expertId
   const filteredDetails = planDetails.filter(
     (detail) => detail.userId === userId && detail.expertsId === expertId
   );
 
-  // Check if the user has used PlanType D, PlanType F, and PlanType P
-  const hasUsedD = filteredDetails.some(detail => detail.planType === 'D');
   const hasUsedF = filteredDetails.some(detail => detail.planType === 'F');
   const hasUsedP = filteredDetails.some(detail => detail.planType === 'P');
 
@@ -80,7 +78,6 @@ const PlanPopup = ({ planDetails, userId, expertId, onClose }) => {
                 <div className="ml-4">
                   <p className="text-lg font-medium text-blue-800">{`PlanType: ${detail.planType}`}</p>
                   <p className="text-sm text-gray-600">{`${new Date(detail.startTime).toLocaleString()} - ${new Date(detail.endTime).toLocaleString()}`}</p>
-                  {/* <p className="mt-2 text-sm text-gray-500">Used on: {new Date(detail.createdOn).toLocaleDateString()}</p> */}
                 </div>
               </li>
             ))}
