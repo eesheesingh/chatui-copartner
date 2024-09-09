@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ChatList from './ChatList';
 import ChatArea from './ChatArea';
 import PlanPopup from './PlanPopup';
@@ -14,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 const ChatApp = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  
   const [username, setUsername] = useState('');
   const [userId, setUserId] = useState('');
   const [selectedContact, setSelectedContact] = useState(null);
@@ -49,6 +50,13 @@ const ChatApp = () => {
   const goBackToChatList = () => {
     closePlanPopups();
     setSelectedContact(null);
+
+    // Remove the expertId from the URL when navigating back to ChatList
+    const pathSegments = location.pathname.split('/');
+    const userId = pathSegments[1];
+    const username = pathSegments[2];
+    const newPath = `/${userId}/${username}`;
+    navigate(newPath, { replace: true });
   };
 
   const handleExpiredTimer = (expertId) => {
@@ -60,7 +68,7 @@ const ChatApp = () => {
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
 
-    window.location.reload();
+    // window.location.reload();
   };
 
   useEffect(() => {
