@@ -289,7 +289,7 @@ const ChatApp = () => {
               setPlanId(freePlan.id);
             }
     
-            const isTimerRunning = sessionStorage.getItem(`isTimerRunning_${expertId}`);
+            const isTimerRunning = sessionStorage.getItem(`timer_${expertId}`);
             const popupShown = sessionStorage.getItem(`popupShown_${expertId}`);
     
             if (hasUsedPlanD) {
@@ -300,6 +300,9 @@ const ChatApp = () => {
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               }
+            } else if (isTimerRunning) {
+                setShowPremiumPlanPopup(false);
+                setShowFreePlanPopup(false);
             } else if (!isTimerRunning) {
               if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
                 setShowPremiumPlanPopup(true);
