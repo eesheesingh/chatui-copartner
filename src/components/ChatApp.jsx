@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatList from './ChatList';
@@ -16,7 +15,7 @@ import SubscriptionMinorPopup from './SubscriptionMinorPopup';
 const ChatApp = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   const [username, setUsername] = useState('');
   const [userId, setUserId] = useState('');
   const [selectedContact, setSelectedContact] = useState(null);
@@ -38,9 +37,7 @@ const ChatApp = () => {
   const [premiumPlans, setPremiumPlans] = useState([]);
   const [planId, setPlanId] = useState('');
   const [paidPlanId, setPaidPlanId] = useState('');
-  const [latestTimespan, setLatestTimespan] = useState(null);
-  const [planType, setPlanType] = useState('D');
-  const [timer, setTimer] = useState(null);
+  const [expertsData, setExpertsData] = useState({});
   const [currentExpertId, setCurrentExpertId] = useState(null);
   const [hasUsedPlanD, setHasUsedPlanD] = useState(false);
   const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false); // Add state for the payment popup
@@ -79,12 +76,16 @@ const ChatApp = () => {
     if (expertId !== currentExpertId) return;
 
     console.log("Timer expired, refreshing the page...");
-    setTimer(null);
+    setExpertsData((prevData) => ({
+      ...prevData,
+      [expertId]: {
+        ...prevData[expertId],
+        timer: null
+      }
+    }));
 
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
-
-    window.location.reload();
   };
 
   useEffect(() => {
@@ -100,8 +101,15 @@ const ChatApp = () => {
     }
 
     const resetTimerAndTimespan = () => {
-      setTimer(null);
-      setLatestTimespan(null);
+      setExpertsData((prevData) => ({
+        ...prevData,
+        [expertIdFromPath]: {
+          ...prevData[expertIdFromPath],
+          timer: null,
+          latestTimespan: null,
+          planType: 'D'
+        }
+      }));
     };
 
     resetTimerAndTimespan();
@@ -111,15 +119,33 @@ const ChatApp = () => {
     const storedPlanType = sessionStorage.getItem(`planType_${expertIdFromPath}`);
 
     if (storedTimespan) {
-      setLatestTimespan(JSON.parse(storedTimespan));
+      setExpertsData((prevData) => ({
+        ...prevData,
+        [expertIdFromPath]: {
+          ...prevData[expertIdFromPath],
+          latestTimespan: JSON.parse(storedTimespan)
+        }
+      }));
     }
 
     if (storedTimer) {
-      setTimer(parseInt(storedTimer, 10));
+      setExpertsData((prevData) => ({
+        ...prevData,
+        [expertIdFromPath]: {
+          ...prevData[expertIdFromPath],
+          timer: parseInt(storedTimer, 10)
+        }
+      }));
     }
 
     if (storedPlanType) {
-      setPlanType(storedPlanType);
+      setExpertsData((prevData) => ({
+        ...prevData,
+        [expertIdFromPath]: {
+          ...prevData[expertIdFromPath],
+          planType: storedPlanType
+        }
+      }));
     }
 
     if (potentialUserId) {
@@ -156,7 +182,6 @@ const ChatApp = () => {
                 email: user.username,
                 channelName: expertResponse.data.data.channelName,
                 subscriptionType: expertResponse.data.data.expertTypeId,
-                planName: 'N/A',
                 expertsId: user.id
               };
             }
@@ -185,7 +210,6 @@ const ChatApp = () => {
             email: expertData.email,
             channelName: expertData.channelName,
             subscriptionType: expertData.expertTypeId,
-            planName: 'N/A',
             expertsId: expertId
           };
           setSelectedContact(contact);
@@ -215,11 +239,17 @@ const ChatApp = () => {
             const timeRemaining = endTime - now;
 
             if (timeRemaining > 0) {
-              setLatestTimespan({
-                start: latestPlan.startTime,
-                end: latestPlan.endTime,
-              });
-              setTimer(timeRemaining / 1000);
+              setExpertsData((prevData) => ({
+                ...prevData,
+                [expertId]: {
+                  ...prevData[expertId],
+                  latestTimespan: {
+                    start: latestPlan.startTime,
+                    end: latestPlan.endTime,
+                  },
+                  timer: timeRemaining / 1000
+                }
+              }));
               sessionStorage.setItem(`timer_${expertId}`, timeRemaining / 1000);
               sessionStorage.setItem(`timespan_${expertId}`, JSON.stringify({
                 start: latestPlan.startTime,
@@ -246,22 +276,22 @@ const ChatApp = () => {
           const chatPlans = chatAvailResponse.data.data.filter(plan => plan.expertsId === expertId);
           const hasUsedD = chatPlans.some(plan => plan.planType === 'D');
           const hasUsedF = chatPlans.some(plan => plan.planType === 'F');
-
+    
           const expertPlansResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
           if (expertPlansResponse.data.isSuccess) {
             const expertPlans = expertPlansResponse.data.data;
             const premiumPlans = expertPlans.filter(plan => plan.planType === 'P');
             setPremiumPlans(premiumPlans);
-
+    
             const freePlan = expertPlans.find(plan => plan.planType === 'F');
             if (freePlan) {
               setFreePlanDuration(freePlan.duration || 2);
-              setPlanId(freePlan.id);  
+              setPlanId(freePlan.id);
             }
-
-            const isTimerRunning = sessionStorage.getItem('isTimerRunning');
-            
-            // Open the popups based on conditions, but if planType "D" has been used, open the popups directly
+    
+            const isTimerRunning = sessionStorage.getItem(`isTimerRunning_${expertId}`);
+            const popupShown = sessionStorage.getItem(`popupShown_${expertId}`);
+    
             if (hasUsedPlanD) {
               if (freePlan && !isTimerRunning) {
                 setShowFreePlanPopup(false);
@@ -285,12 +315,18 @@ const ChatApp = () => {
                 setShowFreePlanPopup(false);
               }
             }
+          
+      
+    
+            // Mark the popup as shown in session storage
+            sessionStorage.setItem(`popupShown_${expertId}`, 'true');
           }
         }
       } catch (error) {
         console.error('Error fetching plan data:', error);
       }
     };
+    
 
     fetchUserImage();
     fetchContacts().then(() => {
@@ -299,7 +335,6 @@ const ChatApp = () => {
       }
     });
 
-    // Check if user has used planType D with any expert and set `hasUsedPlanD` accordingly
     const checkPlanTypeD = async () => {
       try {
         const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${potentialUserId}`);
@@ -322,14 +357,20 @@ const ChatApp = () => {
     let startTime = Date.now();
 
     const checkAndRefresh = () => {
-      if (timer !== null && timer > 0) {
+      if (expertsData[currentExpertId]?.timer > 0) {
         const elapsedTime = (Date.now() - startTime) / 1000;
-        const newTimer = timer - elapsedTime;
+        const newTimer = expertsData[currentExpertId].timer - elapsedTime;
 
         if (newTimer <= 0) {
           handleExpiredTimer(currentExpertId);
         } else {
-          setTimer(newTimer);
+          setExpertsData((prevData) => ({
+            ...prevData,
+            [currentExpertId]: {
+              ...prevData[currentExpertId],
+              timer: newTimer
+            }
+          }));
           startTime = Date.now();
         }
       }
@@ -339,7 +380,7 @@ const ChatApp = () => {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (timer !== null && timer <= 0) {
+        if (expertsData[currentExpertId]?.timer <= 0) {
           handleExpiredTimer(currentExpertId);
         } else {
           checkAndRefresh();
@@ -353,7 +394,7 @@ const ChatApp = () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [timer, currentExpertId]);
+  }, [expertsData, currentExpertId]);
 
   const startConnection = async (username, receiver) => {
     const connection = new signalR.HubConnectionBuilder()
@@ -395,16 +436,16 @@ const ChatApp = () => {
 
           const endTime = new Date(endDateTime);
           const remainingTime = endTime - new Date();
-          setTimer(remainingTime > 0 ? remainingTime / 1000 : 0);
+          setExpertsData((prevData) => ({
+            ...prevData,
+            [currentExpertId]: {
+              ...prevData[currentExpertId],
+              timer: remainingTime > 0 ? remainingTime / 1000 : 0,
+              latestTimespan: timespan
+            }
+          }));
           sessionStorage.setItem(`timer_${currentExpertId}`, remainingTime > 0 ? remainingTime / 1000 : 0);
-
-          setLatestTimespan({
-            start: newMessage.startDateTime,
-            end: newMessage.endDateTime,
-          });
-
           sessionStorage.setItem(`planType_${currentExpertId}`, receivedPlanType);
-          setPlanType(receivedPlanType);
         }
       }
     });
@@ -481,19 +522,19 @@ const ChatApp = () => {
 
     if (connectionRef.current && connectionRef.current.state === signalR.HubConnectionState.Connected) {
       try {
-        if (planType === "D") {
+        if (expertsData[expertId]?.planType === "D") {
           currentPlanId = storedUserId;
           currentPaidPlanId = storedUserId;
         }
 
-        await connectionRef.current.invoke('SendMessage', username, receiver, message.text, planType, currentPlanId, currentPaidPlanId);
+        await connectionRef.current.invoke('SendMessage', username, receiver, message.text, expertsData[expertId]?.planType, currentPlanId, currentPaidPlanId);
 
         const newMessage = {
           user: username,
           message: message.text,
           receiver: receiver,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          planType: planType,
+          planType: expertsData[expertId]?.planType,
           planId: currentPlanId,
           paidPlanId: currentPaidPlanId
         };
@@ -514,7 +555,13 @@ const ChatApp = () => {
   };
 
   const handleSelectPlan = (duration, id, selectedPlanType) => {
-    setPlanType(selectedPlanType);
+    setExpertsData((prevData) => ({
+      ...prevData,
+      [currentExpertId]: {
+        ...prevData[currentExpertId],
+        planType: selectedPlanType
+      }
+    }));
 
     if (selectedPlanType === 'D') {
       const storedUserId = sessionStorage.getItem('userId');
@@ -544,41 +591,55 @@ const ChatApp = () => {
     setExpertId(contact.expertsId);
     setCurrentExpertId(contact.expertsId);
     sessionStorage.setItem('expertId', contact.expertsId);
-
+  
     startConnection(username, contact.email);
     setSelectedContact(contact);
     setUnreadMessages((prevUnread) => ({
       ...prevUnread,
       [contact.email]: 0
     }));
+  
+    // Reset popup states on expert change
+    setShowFreePlanPopup(false);
+    setShowPremiumPlanPopup(false);
+    
+    // Fetch plans and decide if popups should be shown
+    // fetchPlans(userId, contact.expertsId);
   };
+  
 
   useEffect(() => {
-    if (latestTimespan && expertId === currentExpertId) {
-      sessionStorage.setItem(`latestTimespan_${expertId}`, JSON.stringify(latestTimespan));
+    if (expertsData[currentExpertId]?.latestTimespan) {
+      sessionStorage.setItem(`latestTimespan_${expertId}`, JSON.stringify(expertsData[currentExpertId].latestTimespan));
     }
 
-    if (timer !== null && expertId === currentExpertId) {
-      sessionStorage.setItem(`timer_${expertId}`, timer);
+    if (expertsData[currentExpertId]?.timer !== null) {
+      sessionStorage.setItem(`timer_${expertId}`, expertsData[currentExpertId]?.timer);
       sessionStorage.setItem('isTimerRunning', 'true');
     } else {
       sessionStorage.removeItem('isTimerRunning');
     }
-  }, [latestTimespan, timer, expertId, currentExpertId]);
+  }, [expertsData, expertId, currentExpertId]);
 
   const handleBack = () => {
     goBackToChatList();
   };
 
   useEffect(() => {
-    if (latestTimespan && timer !== null && expertId === currentExpertId) {
+    if (expertsData[currentExpertId]?.latestTimespan && expertsData[currentExpertId]?.timer !== null) {
       const now = new Date();
-      const endTime = new Date(latestTimespan.end);
+      const endTime = new Date(expertsData[currentExpertId].latestTimespan.end);
       const timeRemaining = endTime - now;
       if (timeRemaining > 0) {
-        setTimer(timeRemaining / 1000);
+        setExpertsData((prevData) => ({
+          ...prevData,
+          [currentExpertId]: {
+            ...prevData[currentExpertId],
+            timer: timeRemaining / 1000
+          }
+        }));
       } else {
-        handleExpiredTimer(expertId);
+        handleExpiredTimer(currentExpertId);
       }
     }
   }, [selectedContact]);
@@ -596,8 +657,14 @@ const ChatApp = () => {
           conversations={conversations} 
           unreadMessages={unreadMessages} 
           loading={loadingContacts}
-          setPlanType={setPlanType}
-          setLatestTimespan={setLatestTimespan}
+          setPlanType={(expertId, planType) => setExpertsData(prev => ({
+            ...prev,
+            [expertId]: { ...prev[expertId], planType }
+          }))}
+          setLatestTimespan={(expertId, latestTimespan) => setExpertsData(prev => ({
+            ...prev,
+            [expertId]: { ...prev[expertId], latestTimespan }
+          }))}
         />
       </div>
       <div className={`flex-col w-full bg-[#06030E] md:w-2/3 ${selectedContact ? 'flex' : 'hidden md:flex'} border-l-[1px] border-[#ffffff48]`}>
@@ -614,9 +681,9 @@ const ChatApp = () => {
               loading={loading}
               expertId={expertId}
               connectionStatus={connectionStatus}
-              startEndTime={latestTimespan}
+              startEndTime={expertsData[expertId]?.latestTimespan}
               onShowPlanDetails={onShowPlanDetails}
-              timer={timer}
+              timer={expertsData[expertId]?.timer}
               showFreePlanPopup={showFreePlanPopup}
               showPremiumPlanPopup={showPremiumPlanPopup}
               freePlanDuration={freePlanDuration}
