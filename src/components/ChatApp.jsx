@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatList from './ChatList';
@@ -68,7 +69,7 @@ const ChatApp = () => {
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
 
-    // window.location.reload();
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -247,10 +248,10 @@ const ChatApp = () => {
             
             // Open the popups based on conditions, but if planType "D" has been used, open the popups directly
             if (hasUsedPlanD) {
-              if (freePlan) {
-                setShowFreePlanPopup(true);
-                setShowPremiumPlanPopup(false);
-              } else if (premiumPlans.length > 0) {
+              if (freePlan && !isTimerRunning) {
+                setShowFreePlanPopup(false);
+                setShowPremiumPlanPopup(true);
+              } else if (premiumPlans.length > 0 && !isTimerRunning) {
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               }
@@ -634,7 +635,9 @@ const ChatApp = () => {
         <FreePlanPopup 
           freePlan={{ duration: freePlanDuration, id: planId }}
           onSelectPlan={handleSelectPlan}
-          onClose={() => setShowFreePlanPopup(false)} 
+          onClose={() => setShowFreePlanPopup(false)}
+          onBackToChatList={goBackToChatList}
+
         />
       )}
       {showPremiumPlanPopup && premiumPlans.length > 0 && (
