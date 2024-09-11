@@ -1,7 +1,7 @@
 import React from 'react';
 import { AiOutlineClose } from 'react-icons/ai';
 
-const PremiumPlanPopup = ({ plans, onSelectPlan, onClose, onBackToChatList }) => {
+const PremiumPlanPopup = ({ plans, onSelectPlan, onOpenPayment, onClose, onBackToChatList }) => {
   const getExpertType = (typeId) => {
     switch (typeId) {
       case 1:
@@ -17,19 +17,16 @@ const PremiumPlanPopup = ({ plans, onSelectPlan, onClose, onBackToChatList }) =>
 
   const handlePaidPlan = (plan) => {
     console.log('User has chosen the Premium plan:', plan);
-    onSelectPlan(plan.duration, plan.id, 'P');
-    onClose(); // This will close only the PremiumPlanPopup
-  };
-
-  const handleCloseIconClick = () => {
-    onBackToChatList(); // Trigger going back to the chat list
+    onSelectPlan(plan.duration, plan.id, 'P'); // Select the plan
+    onOpenPayment(plan); // Trigger the payment popup
+    onClose(); // Close the PremiumPlanPopup
   };
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border border-gray-300 text-black m-3 p-6 rounded-t-lg shadow-xl z-50">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-center">Oh No! Your Time Is Up!</h2>
-        <button onClick={handleCloseIconClick} className="text-gray-600 hover:text-gray-800 transition-colors">
+        <button onClick={onBackToChatList} className="text-gray-600 hover:text-gray-800 transition-colors">
           <AiOutlineClose size={24} />
         </button>
       </div>

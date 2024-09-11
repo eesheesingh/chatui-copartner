@@ -10,6 +10,7 @@ import * as signalR from '@microsoft/signalr';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
+import SubscriptionMinorPopup from './SubscriptionMinorPopup';
 
 const ChatApp = () => {
   const location = useLocation();
@@ -40,7 +41,21 @@ const ChatApp = () => {
   const [planType, setPlanType] = useState('D');
   const [timer, setTimer] = useState(null);
   const [currentExpertId, setCurrentExpertId] = useState(null);
-  const [hasUsedPlanD, setHasUsedPlanD] = useState(false); // Track if user has used PlanType D with any expert
+  const [hasUsedPlanD, setHasUsedPlanD] = useState(false);
+  const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false); // Add state for the payment popup
+  const [selectedPlan, setSelectedPlan] = useState(null);
+
+  const handleOpenPaymentPopup = (plan) => {
+    console.log(plan)
+    setSelectedPlan(plan);
+    setShowSubscriptionPopup(true); // Open the payment modal
+  };
+
+  // Close the payment popup
+  const handleClosePaymentPopup = () => {
+    setShowSubscriptionPopup(false);
+    setSelectedPlan(null);
+  };
 
   const closePlanPopups = () => {
     setShowFreePlanPopup(false);
@@ -68,7 +83,7 @@ const ChatApp = () => {
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
 
-    // window.location.reload();
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -247,10 +262,10 @@ const ChatApp = () => {
             
             // Open the popups based on conditions, but if planType "D" has been used, open the popups directly
             if (hasUsedPlanD) {
-              if (freePlan) {
-                setShowFreePlanPopup(true);
-                setShowPremiumPlanPopup(false);
-              } else if (premiumPlans.length > 0) {
+              if (freePlan && !isTimerRunning) {
+                setShowFreePlanPopup(false);
+                setShowPremiumPlanPopup(true);
+              } else if (premiumPlans.length > 0 && !isTimerRunning) {
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               }
@@ -639,10 +654,19 @@ const ChatApp = () => {
       )}
       {showPremiumPlanPopup && premiumPlans.length > 0 && (
         <PremiumPlanPopup 
-          plans={premiumPlans} 
+          plans={premiumPlans}
           onSelectPlan={handleSelectPlan}
+          onOpenPayment={handleOpenPaymentPopup} // Pass the handler to open payment modal
           onClose={closePlanPopups}
           onBackToChatList={goBackToChatList}
+        />
+      )}
+      {showSubscriptionPopup && (
+        <SubscriptionMinorPopup
+          selectedPlan={selectedPlan} // Pass the selected plan to the payment modal
+          onClose={handleClosePaymentPopup}
+          userId={userId}
+          mobileNumber={username}
         />
       )}
     </div>
