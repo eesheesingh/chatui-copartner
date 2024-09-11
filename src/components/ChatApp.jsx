@@ -260,36 +260,58 @@ const ChatApp = () => {
         if (chatAvailResponse.data.isSuccess) {
           const chatPlans = chatAvailResponse.data.data.filter(plan => plan.expertsId === expertId);
           const hasUsedD = chatPlans.some(plan => plan.planType === 'D');
-
+          const hasUsedF = chatPlans.some(plan => plan.planType === 'F');
+    
           const expertPlansResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
           if (expertPlansResponse.data.isSuccess) {
             const expertPlans = expertPlansResponse.data.data;
             const premiumPlans = expertPlans.filter(plan => plan.planType === 'P');
             setPremiumPlans(premiumPlans);
-
+    
             const freePlan = expertPlans.find(plan => plan.planType === 'F');
             if (freePlan) {
               setFreePlanDuration(freePlan.duration || 2);
               setPlanId(freePlan.id);
             }
-
-            const isTimerRunning = sessionStorage.getItem('isTimerRunning');
-            
-            if (hasUsedPlanD || hasUsedD) {
+    
+            const isTimerRunning = sessionStorage.getItem(`isTimerRunning_${expertId}`);
+            const popupShown = sessionStorage.getItem(`popupShown_${expertId}`);
+    
+            if (hasUsedPlanD) {
               if (freePlan && !isTimerRunning) {
-                setShowFreePlanPopup(true);
-                setShowPremiumPlanPopup(false);
+                setShowFreePlanPopup(false);
+                setShowPremiumPlanPopup(true);
               } else if (premiumPlans.length > 0 && !isTimerRunning) {
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               }
+            } else if (!isTimerRunning) {
+              if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
+                setShowPremiumPlanPopup(true);
+                setShowFreePlanPopup(false);
+              } else if (!freePlan && hasUsedD) {
+                setShowPremiumPlanPopup(true);
+                setShowFreePlanPopup(false);
+              } else if (hasUsedD && freePlan) {
+                setShowFreePlanPopup(true);
+                setShowPremiumPlanPopup(false);
+              } else if (premiumPlans.length > 0) {
+                setShowPremiumPlanPopup(false);
+                setShowFreePlanPopup(false);
+              }
             }
+          
+      
+    
+            // Mark the popup as shown in session storage
+            sessionStorage.setItem(`popupShown_${expertId}`, 'true');
           }
         }
       } catch (error) {
         console.error('Error fetching plan data:', error);
       }
     };
+    
 
     fetchUserImage();
     fetchContacts().then(() => {
@@ -554,14 +576,22 @@ const ChatApp = () => {
     setExpertId(contact.expertsId);
     setCurrentExpertId(contact.expertsId);
     sessionStorage.setItem('expertId', contact.expertsId);
-
+  
     startConnection(username, contact.email);
     setSelectedContact(contact);
     setUnreadMessages((prevUnread) => ({
       ...prevUnread,
       [contact.email]: 0
     }));
+  
+    // Reset popup states on expert change
+    setShowFreePlanPopup(false);
+    setShowPremiumPlanPopup(false);
+    
+    // Fetch plans and decide if popups should be shown
+    // fetchPlans(userId, contact.expertsId);
   };
+  
 
   useEffect(() => {
     if (expertsData[currentExpertId]?.latestTimespan) {
