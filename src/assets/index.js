@@ -7,6 +7,7 @@ import sebi from "./sebiImg.png";
 import sender from "./user.png";
 import loadingGif from "./bouncing-circles.svg";
 import chatIcon from './chatIcon.png'
+import subIcon from "./premiumIcon.png";
 export {
     back,
     logo,
@@ -17,4 +18,5 @@ export {
     sender,
     loadingGif,
     chatIcon,
+    subIcon,
 }

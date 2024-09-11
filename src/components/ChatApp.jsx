@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatList from './ChatList';
@@ -649,7 +650,9 @@ const ChatApp = () => {
         <FreePlanPopup 
           freePlan={{ duration: freePlanDuration, id: planId }}
           onSelectPlan={handleSelectPlan}
-          onClose={() => setShowFreePlanPopup(false)} 
+          onClose={() => setShowFreePlanPopup(false)}
+          onBackToChatList={goBackToChatList}
+
         />
       )}
       {showPremiumPlanPopup && premiumPlans.length > 0 && (
