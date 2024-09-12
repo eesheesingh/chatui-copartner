@@ -86,6 +86,7 @@ const ChatApp = () => {
 
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -645,7 +646,7 @@ const ChatApp = () => {
         handleExpiredTimer(currentExpertId);
       }
     }
-  }, [selectedContact]);
+  }, [selectedContact, expertsData[expertId]?.timer]);
 
   const onShowPlanDetails = () => {
     fetchPlanDetails();

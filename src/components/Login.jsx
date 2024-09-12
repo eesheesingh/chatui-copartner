@@ -209,14 +209,14 @@ const LoginPopup = ({ onClose }) => {
     <>
       <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 w-screen h-screen">
         <div className="bg-white border border-gray-300 p-8 rounded-xl w-96 relative shadow-lg">
-          <div className="absolute top-3 right-3">
+          {/* <div className="absolute top-3 right-3">
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700 transition duration-200"
             >
               <FiX className="w-6 h-6" />
             </button>
-          </div>
+          </div> */}
 
           <div className="mb-6 text-center">
             <h2 className="text-3xl font-semibold text-gray-800">
