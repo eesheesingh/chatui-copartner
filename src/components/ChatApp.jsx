@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatList from './ChatList';
@@ -10,6 +11,7 @@ import * as signalR from '@microsoft/signalr';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
+// import SubscriptionMinorPopup from './SubscriptionMinorPopup';
 
 const ChatApp = () => {
   const location = useLocation();
@@ -38,7 +40,21 @@ const ChatApp = () => {
   const [paidPlanId, setPaidPlanId] = useState('');
   const [expertsData, setExpertsData] = useState({});
   const [currentExpertId, setCurrentExpertId] = useState(null);
-  const [hasUsedPlanD, setHasUsedPlanD] = useState(false); // Track if user has used PlanType D with any expert
+  const [hasUsedPlanD, setHasUsedPlanD] = useState(false);
+  const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false); // Add state for the payment popup
+  const [selectedPlan, setSelectedPlan] = useState(null);
+
+  const handleOpenPaymentPopup = (plan) => {
+    console.log(plan)
+    setSelectedPlan(plan);
+    setShowSubscriptionPopup(true); // Open the payment modal
+  };
+
+  // Close the payment popup
+  const handleClosePaymentPopup = () => {
+    setShowSubscriptionPopup(false);
+    setSelectedPlan(null);
+  };
 
   const closePlanPopups = () => {
     setShowFreePlanPopup(false);
@@ -71,6 +87,7 @@ const ChatApp = () => {
 
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -274,32 +291,43 @@ const ChatApp = () => {
               setPlanId(freePlan.id);
             }
     
-            const isTimerRunning = sessionStorage.getItem(`isTimerRunning_${expertId}`);
+            const isTimerRunning = sessionStorage.getItem(`timer_${expertId}`);
             const popupShown = sessionStorage.getItem(`popupShown_${expertId}`);
     
             if (hasUsedPlanD) {
-              if (freePlan && !isTimerRunning) {
-                setShowFreePlanPopup(false);
-                setShowPremiumPlanPopup(true);
-              } else if (premiumPlans.length > 0 && !isTimerRunning) {
+              if (freePlan && !isTimerRunning && !hasUsedF) {
+                // If the user has only used planType "D" and hasn't used "F", open FreePlanPopup
+                setShowFreePlanPopup(true);
+                setShowPremiumPlanPopup(false);
+              } else if (premiumPlans.length > 0 && hasUsedF && !isTimerRunning) {
+                // If the user has used both planType "D" and "F", open PremiumPlanPopup
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               }
+            } else if (isTimerRunning) {
+              // If the timer is running, close both popups
+              setShowPremiumPlanPopup(false);
+              setShowFreePlanPopup(false);
             } else if (!isTimerRunning) {
               if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
+                // If both "D" and "F" have been used, show PremiumPlanPopup
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               } else if (!freePlan && hasUsedD) {
+                // If "D" has been used but no free plan is available, show PremiumPlanPopup
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               } else if (hasUsedD && freePlan) {
+                // If "D" has been used and a free plan is available, show FreePlanPopup
                 setShowFreePlanPopup(true);
                 setShowPremiumPlanPopup(false);
               } else if (premiumPlans.length > 0) {
+                // Default case where only premium plans are available
                 setShowPremiumPlanPopup(false);
                 setShowFreePlanPopup(false);
               }
             }
+            
           
       
     
@@ -627,7 +655,7 @@ const ChatApp = () => {
         handleExpiredTimer(currentExpertId);
       }
     }
-  }, [selectedContact]);
+  }, [selectedContact, expertsData[expertId]?.timer]);
 
   const onShowPlanDetails = () => {
     fetchPlanDetails();
@@ -709,12 +737,21 @@ const ChatApp = () => {
       )}
       {showPremiumPlanPopup && premiumPlans.length > 0 && (
         <PremiumPlanPopup 
-          plans={premiumPlans} 
+          plans={premiumPlans}
           onSelectPlan={handleSelectPlan}
+          onOpenPayment={handleOpenPaymentPopup} // Pass the handler to open payment modal
           onClose={closePlanPopups}
           onBackToChatList={goBackToChatList}
         />
       )}
+      {/* {showSubscriptionPopup && (
+        <SubscriptionMinorPopup
+          selectedPlan={selectedPlan} // Pass the selected plan to the payment modal
+          onClose={handleClosePaymentPopup}
+          userId={userId}
+          mobileNumber={username}
+        />
+      )} */}
     </div>
   );
 };
