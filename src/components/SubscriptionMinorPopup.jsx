@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { IoCloseCircleOutline } from "react-icons/io5";
 
-const SubscriptionMinorPopup = ({ 
-  onClose, 
-  selectedPlan, 
-  userId, 
-  expertName, 
-  chatId, 
-  mobileNumber 
+const SubscriptionMinorPopup = ({
+  onClose,
+  selectedPlan,
+  userId,
+  expertName,
+  chatId,
+  mobileNumber,
 }) => {
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -27,8 +27,8 @@ const SubscriptionMinorPopup = ({
   };
 
   const handlePay = async () => {
-    if (loading) return; // Prevent multiple clicks
-    setLoading(true); // Disable the button
+    setLoading(true);
+    console.log(selectedPlan);
 
     const res = await loadRazorpayScript();
 
@@ -38,149 +38,134 @@ const SubscriptionMinorPopup = ({
       return;
     }
 
-    try {
-      const transactionDate = new Date().toISOString();
+    // SubscriberCreateDto object using dynamic props
+    const chatSubscriberCreateDto = {
+      chatPlanId: selectedPlan.id, // From selectedPlan
+      userId: userId, // From props
+      gstAmount: selectedPlan.price * 0.18, // GST calculated from selectedPlan
+      totalAmount: selectedPlan.price, // Total price from selectedPlan
+      discountPercentage: selectedPlan.discountPercentage || 0, // If available, else 0
+      paymentMode: "UPI", // Static for now
+      transactionId: `T${Date.now()}`, // Simulated transaction ID
+      transactionDate: new Date().toISOString(), // Current timestamp
+      isActive: true, // Assuming it's active by default
+      invoiceId :"",
+      paymentId: "",
+      isWebhookProcessed: false,
+    };
 
-      // Combine the subscription data into one request payload
-      const subscriberCreateDto = {
-        subscriptionId: selectedPlan.id,
-        userId: userId,
-        totalAmount: selectedPlan.price,
-        paymentMode: "UPI", // Assuming UPI as the payment mode
-        transactionDate,
-        isActive: true,
-        expertName: expertName,
-        chatId: chatId,
-        mobileNumber: mobileNumber
-      };
-
-      const inviteLinkCreateDto = {
-        chatId: Math.floor(Math.random() * 100000000),
-        durationMonths: 1, // Assuming monthly duration; adjust as needed
-        isCustom: false,
-        mobileNumber: mobileNumber,
-        userId: userId,
-      };
-
-      const orderRequestDto = {
-        subscriberCreateDto,
-        inviteLinkCreateDto,
-      };
-
-      // Step 1: Create order on the backend
-      const response = await fetch(
-        "https://copartners.in:5009/api/PaymentGateway/create-order",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(orderRequestDto),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Network response was not ok: ${errorText}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
+    // Fetch to create order
+    fetch(
+      `https://copartners.in:5137/api/PaymentGateway/create-order`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(chatSubscriberCreateDto),
       }
+    )
+      .then((response) => {
+        if (!response.ok) {
+          return response.text().then((text) => {
+            console.error(`Network response was not ok: ${text}`);
+            throw new Error(`Network response was not ok: ${text}`);
+          });
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (data.error) {
+          alert(`Error: ${data.error}`);
+          return;
+        }
 
-      const resData = await response.json();
-
-      if (resData.orderId) {
+        // Razorpay options using dynamic props
         const options = {
-          key: "rzp_live_D2N1nZHECBBkuW", // Replace with your Razorpay key ID
-          amount: resData.amountInPaise, // Amount in paise
+          key: "rzp_test_9lu374ftxzhZBK",
+          amount: data.amountInPaise, // Amount in paise from API
           currency: "INR",
-          name: "Copartner",
-          description: selectedPlan.description || "Subscription Plan",
-          order_id: resData.orderId, // Order ID from backend
+          name: expertName, // Expert name from props
+          description: `Chat`, // Dynamic plan name
+          order_id: data.orderId, // Razorpay order ID from API
           handler: function (response) {
             console.log("Payment response:", response);
-            capturePayment(response.razorpay_payment_id, resData.orderId); // Pass orderId to capturePayment
+            capturePayment(response.razorpay_payment_id, data.orderId);
+
+            sessionStorage.setItem("transactionId", chatSubscriberCreateDto.transactionId);
+            sessionStorage.setItem("orderId", data.orderId);
+            sessionStorage.setItem("chatPlanId", selectedPlan.id);
           },
           prefill: {
-            name: expertName || "User Name",
-            email: "user@example.com", // Replace with actual user email
-            contact: mobileNumber || "9999999999", // Replace with actual mobile number
-          },
-          theme: {
-            color: "#3399cc",
+            name: "John Doe", // You can make this dynamic if you want
+            email: "john.doe@example.com", // Can be dynamic as well
+            contact: mobileNumber, // Prefill mobile number dynamically
           },
         };
 
-        const paymentObject = new window.Razorpay(options);
-        paymentObject.open();
-      } else {
-        console.error("Payment initiation failed:", resData);
-      }
-    } catch (error) {
-      console.error("Error in handlePay:", error);
-    } finally {
-      setLoading(false); // Re-enable the button once the process is complete
-    }
+        const rzp1 = new window.Razorpay(options);
+        rzp1.open();
+      })
+      .catch((error) => {
+        console.error("Error creating order:", error);
+        alert("Order creation failed");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
 
-  // Function to capture the payment
-  const capturePayment = async (paymentId, orderId) => {
-    const amount = selectedPlan.price;
+  const capturePayment = (paymentId, orderId) => {
+    const amount = selectedPlan.price; // Dynamic total amount
 
     const subscriberCreateDto = {
-      subscriptionId: selectedPlan.id,
-      userId: userId,
-      totalAmount: amount,
-      paymentMode: "UPI",
-      transactionId: paymentId,
-      transactionDate: new Date().toISOString(),
-      isActive: true,
+      chatPlanId: selectedPlan.id, // Dynamic subscription ID
+      userId: userId, // Dynamic user ID
+      gstAmount: selectedPlan.price * 0.18, // Dynamic GST amount
+      totalAmount: amount, // Dynamic total amount
+      discountPercentage: selectedPlan.discountPercentage || 0, // Dynamic discount
+      paymentMode: "UPI", // Static for now
+      transactionId: `T${Date.now()}`, // Razorpay payment ID
+      transactionDate: new Date().toISOString(), // Current timestamp
+      isActive: true, // Assuming it's active by default
+      invoiceId :"",
+      paymentId: paymentId,
+      isWebhookProcessed: false,
     };
 
-    const inviteLinkCreateDto = {
-      chatId: Math.floor(Math.random() * 100000000),
-      durationMonths: 1, // Assuming monthly duration; adjust as needed
-      isCustom: false,
-      mobileNumber: mobileNumber,
-      userId: userId,
-    };
+    console.log(subscriberCreateDto);
 
-    const orderRequestDto = {
-      subscriberCreateDto,
-      inviteLinkCreateDto,
-    };
-
-    try {
-      setRedirecting(true);
-      const response = await fetch(
-        `https://copartners.in:5009/api/PaymentGateway/capture-payment?paymentId=${paymentId}&amount=${amount}&orderId=${orderId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(orderRequestDto),
+    // Fetch to capture payment
+    fetch(
+      `https://copartners.in:5137/api/PaymentGateway/capture-payment?paymentId=${paymentId}&amount=${amount}&orderId=${orderId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(subscriberCreateDto),
+      }
+    )
+      .then((response) => {
+        if (!response.ok) {
+          return response.text().then((text) => {
+            console.error(`Network response was not ok: ${text}`);
+            throw new Error(`Network response was not ok: ${text}`);
+          });
         }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Network response was not ok: ${errorText}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("Payment capture response:", data);
-
-      if (data.success) {
-        window.location.href = data.redirectUrl;
-      } else {
-        alert(`Error: ${data.message}`);
-      }
-    } catch (error) {
-      console.error("Error capturing payment:", error);
-      alert("Payment capture failed");
-    } finally {
-      setRedirecting(false);
-    }
+        return response.json();
+      })
+      .then((data) => {
+        if (data.success) {
+          alert("payment success"); // Redirect to success page if required
+        } else {
+          alert(`Error: ${data.message}`);
+        }
+      })
+      .catch((error) => {
+        console.error("Error capturing payment:", error);
+        alert("Payment capture failed");
+      });
   };
 
   return (
@@ -204,13 +189,17 @@ const SubscriptionMinorPopup = ({
                 <label className="block text-sm text-gray-500 font-normal">
                   Subscription Plan
                 </label>
-                <span className="text-sm text-black">{selectedPlan.planName}</span>
+                <span className="text-sm text-black">
+                  {selectedPlan.planName}
+                </span>
               </div>
               <div className="flex justify-between mb-2">
                 <label className="block text-sm text-gray-500 font-normal">
                   Amount
                 </label>
-                <span className="text-sm text-black">₹{selectedPlan.price}</span>
+                <span className="text-sm text-black">
+                  ₹{selectedPlan.price}
+                </span>
               </div>
             </div>
 

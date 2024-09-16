@@ -43,6 +43,31 @@ const ChatApp = () => {
   const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false); // Add state for the payment popup
   const [selectedPlan, setSelectedPlan] = useState(null);
 
+  const checkPaymentStatus = (transactionId) => {
+    // Call the API to check the payment status
+    fetch(`https://copartners.in:5137/api/ChatConfiguration/GetChatSubscribe/${transactionId}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.isSuccess) {
+          console.log("Payment Status:", data);
+          setShowPremiumPlanPopup(false);
+        } else {
+          console.error("Payment status check failed:", data.errorMessages);
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching payment status:", error);
+      });
+  };
+
+  // Check payment status on page load
+  useEffect(() => {
+    const transactionId = sessionStorage.getItem("transactionId");
+    if (transactionId) {
+      checkPaymentStatus(transactionId); // Check payment status with stored transaction ID
+    }
+  }, []);
+
   const handleOpenPaymentPopup = (plan) => {
     console.log(plan)
     setSelectedPlan(plan);
