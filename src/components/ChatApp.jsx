@@ -90,6 +90,19 @@ const ChatApp = () => {
     window.location.reload();
   };
 
+  const checkPlanTypeDGlobal = async (userId) => {
+    try {
+      const response = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${userId}`);
+      if (response.data.isSuccess) {
+        const hasUsedDWithAnyExpert = response.data.data.some(plan => plan.planType === 'D');
+        setHasUsedPlanD(hasUsedDWithAnyExpert); // Store the result in the state
+      }
+    } catch (error) {
+      console.error('Error checking PlanType D:', error);
+    }
+  };
+  
+
   useEffect(() => {
     const pathSegments = location.pathname.split('/');
     const potentialUserId = pathSegments[1];
@@ -153,7 +166,8 @@ const ChatApp = () => {
     if (potentialUserId) {
       setUserId(potentialUserId);
       sessionStorage.setItem('userId', potentialUserId);
-    } else {
+      checkPlanTypeDGlobal(potentialUserId);  // Check global Plan D usage on initial load
+    }else {
       console.error('Invalid userId in URL path');
     }
 
@@ -275,9 +289,17 @@ const ChatApp = () => {
       try {
         const chatAvailResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${userId}`);
         if (chatAvailResponse.data.isSuccess) {
-          const chatPlans = chatAvailResponse.data.data.filter(plan => plan.expertsId === expertId);
-          const hasUsedD = chatPlans.some(plan => plan.planType === 'D');
-          const hasUsedF = chatPlans.some(plan => plan.planType === 'F');
+          const chatPlans = chatAvailResponse.data.data;
+          const hasUsedDWithAnyExpert = chatPlans.some(plan => plan.planType === 'D'); // Global "D" check
+          const hasUsedFWithThisExpert = chatPlans.some(plan => plan.planType === 'F' && plan.expertsId === expertId); // "F" check for specific expert
+          const hasUsedFGlobally = chatPlans.some(plan => plan.planType === 'F'); // Global "F" check
+    
+          // If the user has not used Plan D with any expert, don't show any popup
+          if (!hasUsedDWithAnyExpert) {
+            setShowFreePlanPopup(false);
+            setShowPremiumPlanPopup(false);
+            return; // Exit the function early if Plan D hasn't been used
+          }
     
           const expertPlansResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
           if (expertPlansResponse.data.isSuccess) {
@@ -292,46 +314,28 @@ const ChatApp = () => {
             }
     
             const isTimerRunning = sessionStorage.getItem(`timer_${expertId}`);
-            const popupShown = sessionStorage.getItem(`popupShown_${expertId}`);
     
-            if (hasUsedPlanD) {
-              if (freePlan && !isTimerRunning && !hasUsedF) {
-                // If the user has only used planType "D" and hasn't used "F", open FreePlanPopup
-                setShowFreePlanPopup(true);
-                setShowPremiumPlanPopup(false);
-              } else if (premiumPlans.length > 0 && hasUsedF && !isTimerRunning) {
-                // If the user has used both planType "D" and "F", open PremiumPlanPopup
-                setShowPremiumPlanPopup(true);
-                setShowFreePlanPopup(false);
-              }
+            // Ensure Free Plan Popup opens first if a free plan is available and not yet used
+            if (freePlan && !isTimerRunning && !hasUsedFWithThisExpert) {
+              // If there is a free plan, timer is not running, and Plan F has not been used for this expert, show FreePlanPopup
+              setShowFreePlanPopup(true);
+              setShowPremiumPlanPopup(false); // Ensure PremiumPlanPopup is hidden
+            } else if (!freePlan && premiumPlans.length > 0 && !isTimerRunning) {
+              // If no free plan and premium plans are available, show Premium Plan popup
+              setShowPremiumPlanPopup(true);
+              setShowFreePlanPopup(false);
             } else if (isTimerRunning) {
-              // If the timer is running, close both popups
+              // No popups if a timer is running
               setShowPremiumPlanPopup(false);
               setShowFreePlanPopup(false);
             } else if (!isTimerRunning) {
-              if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
-                // If both "D" and "F" have been used, show PremiumPlanPopup
+              // Final fallback: handle premium popup if eligible and no free plan
+              if (premiumPlans.length > 0) {
                 setShowPremiumPlanPopup(true);
-                setShowFreePlanPopup(false);
-              } else if (!freePlan && hasUsedD) {
-                // If "D" has been used but no free plan is available, show PremiumPlanPopup
-                setShowPremiumPlanPopup(true);
-                setShowFreePlanPopup(false);
-              } else if (hasUsedD && freePlan) {
-                // If "D" has been used and a free plan is available, show FreePlanPopup
-                setShowFreePlanPopup(true);
-                setShowPremiumPlanPopup(false);
-              } else if (premiumPlans.length > 0) {
-                // Default case where only premium plans are available
-                setShowPremiumPlanPopup(false);
                 setShowFreePlanPopup(false);
               }
             }
-            
-          
-      
     
-            // Mark the popup as shown in session storage
             sessionStorage.setItem(`popupShown_${expertId}`, 'true');
           }
         }
