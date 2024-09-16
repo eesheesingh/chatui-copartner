@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatList from './ChatList';
@@ -319,31 +320,39 @@ const ChatApp = () => {
             const popupShown = sessionStorage.getItem(`popupShown_${expertId}`);
     
             if (hasUsedPlanD) {
-              if (freePlan && !isTimerRunning) {
-                setShowFreePlanPopup(false);
-                setShowPremiumPlanPopup(true);
-              } else if (premiumPlans.length > 0 && !isTimerRunning) {
+              if (freePlan && !isTimerRunning && !hasUsedF) {
+                // If the user has only used planType "D" and hasn't used "F", open FreePlanPopup
+                setShowFreePlanPopup(true);
+                setShowPremiumPlanPopup(false);
+              } else if (premiumPlans.length > 0 && hasUsedF && !isTimerRunning) {
+                // If the user has used both planType "D" and "F", open PremiumPlanPopup
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               }
             } else if (isTimerRunning) {
-                setShowPremiumPlanPopup(false);
-                setShowFreePlanPopup(false);
+              // If the timer is running, close both popups
+              setShowPremiumPlanPopup(false);
+              setShowFreePlanPopup(false);
             } else if (!isTimerRunning) {
               if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
+                // If both "D" and "F" have been used, show PremiumPlanPopup
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               } else if (!freePlan && hasUsedD) {
+                // If "D" has been used but no free plan is available, show PremiumPlanPopup
                 setShowPremiumPlanPopup(true);
                 setShowFreePlanPopup(false);
               } else if (hasUsedD && freePlan) {
+                // If "D" has been used and a free plan is available, show FreePlanPopup
                 setShowFreePlanPopup(true);
                 setShowPremiumPlanPopup(false);
               } else if (premiumPlans.length > 0) {
+                // Default case where only premium plans are available
                 setShowPremiumPlanPopup(false);
                 setShowFreePlanPopup(false);
               }
             }
+            
           
       
     

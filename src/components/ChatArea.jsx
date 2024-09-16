@@ -120,16 +120,16 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
       exit={{ opacity: 0, x: -50 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="p-4 bg-white shadow-md rounded-lg flex items-center justify-between">
+      <div className="p-4 bg-transparent rounded-lg flex items-center justify-between">
         <div className="flex items-center">
           <button className="md:hidden p-2 mr-4 bg-gray-100 rounded-full" onClick={onBack}>
-            <img src={back} alt="Back" className="w-10" />
+            <img src={back} alt="Back" className="md:w-10 w-8" />
           </button>
           <div className="relative mr-4">
             <img
               src={selectedContact.img}
               alt={selectedContact.name}
-              className="w-16 h-auto rounded-full bg-gray-200 border-2 border-gray-300"
+              className="md:w-16 w-12 h-auto rounded-full bg-gray-200 border-2 border-gray-300"
             />
             <span
               className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${
@@ -153,7 +153,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="text-sm text-gray-500 mt-1"
+                className="md:text-sm text-[10px] text-gray-500 mt-1 w-full"
               >
                 Your time will start when the expert replies.
               </motion.div>
@@ -279,10 +279,10 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
         </div>
       )}
       <div className="p-4 border-t border-gray-300 flex bg-[#a7d6f78a] items-center gap-2">
-        <label className="ml-2 p-2 text-[22px] text-black rounded cursor-pointer">
+        {/* <label className="ml-2 p-2 text-[22px] text-black rounded cursor-pointer">
           <input type="file" className="hidden" onChange={handleFileUpload} />
           <IoMdAttach />
-        </label>
+        </label> */}
         <input
           type="text"
           className="flex-grow p-2 bg-transparent text-black placeholder-gray-500"
@@ -292,7 +292,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
           onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
         />
         <button
-          className="ml-2 p-2 bg-gradient-to-r from-[#0081F1] to-[#45C4D5] text-white rounded-full"
+          className="p-2 bg-gradient-to-r from-[#0081F1] to-[#45C4D5] text-white rounded-full"
           onClick={sendMessage}
         >
           <TbMessage2Share className='text-[22px]' />

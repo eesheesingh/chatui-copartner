@@ -12,14 +12,15 @@ const ContactItem = ({
   getExpertType,
   activeTab,
   premiumPrice,
-  hasUsedPlanD // Check if user has used Plan D
+  hasUsedPlanD,
+  hasGlobalUsedPlanD // Add global Plan D check
 }) => {
   const contactImage =
     activeTab === "Chats" ? contact.img : contact.expertImagePath;
 
   return (
     <div
-      className={`relative mx-3 flex flex-col items-center p-4 cursor-pointer bg-[#fff] hover:bg-gray-100 border-[#00000021] transition duration-200 mb-4 border-2 rounded-3xl`}
+      className="relative mx-3 flex flex-col items-center p-4 cursor-pointer bg-[#fff] hover:bg-gray-100 border-[#00000021] transition duration-200 mb-4 border-2 rounded-3xl"
       onClick={() => onSelectContact(contact)}
     >
       <div className="flex flex-row justify-between items-center w-full">
@@ -34,19 +35,18 @@ const ContactItem = ({
         />
         <div className="flex-1">
           <div className="text-gray-600 text-sm flex flex-row justify-between">
-            <div className="flex flex-col">
-              <span className="text-gray-800 text-[20px] font-semibold ml-3 font-poppins">
+            <div className="flex flex-col w-[150px]">
+              <span className="text-gray-800 text-[20px] font-medium ml-3 font-poppins">
                 {contact.channelName}
               </span>
-              <p className="font-semibold ml-3 font-poppins text-[#24243f92]">
+              <p className="font-regular ml-3 font-poppins text-[#24243f92]">
                 {contact.name}
               </p>
               <div className="flex gap-2 ml-3">
                 {premiumPrice ? (
-                  hasUsedPlanD ? (
-                    <p className="text-[17px] font-bold">
-                      ₹{premiumPrice}/min
-                    </p>
+                  // Conditionally hide "Free" if planType "D" is used globally
+                  hasGlobalUsedPlanD ? (
+                    <p className="text-[17px] font-bold">₹{premiumPrice}/min</p>
                   ) : (
                     <>
                       <p className="text-[17px] font-bold line-through">
@@ -60,9 +60,11 @@ const ContactItem = ({
                 ) : (
                   <>
                     <p className="text-[17px] font-bold line-through">₹10/min</p>
-                    <span className="text-gradient-2 font-bold text-[17px]">
-                      FREE
-                    </span>
+                    {!hasGlobalUsedPlanD && (
+                      <span className="text-gradient-2 font-bold text-[17px]">
+                        FREE
+                      </span>
+                    )}
                   </>
                 )}
               </div>
@@ -106,6 +108,7 @@ const ChatList = ({
   const [contactsData, setContactsData] = useState(contacts);
   const [premiumPrices, setPremiumPrices] = useState({}); // Store premium prices
   const [usedPlanD, setUsedPlanD] = useState({}); // Store which experts have plan D used
+  const [hasGlobalUsedPlanD, setHasGlobalUsedPlanD] = useState(false); // Track global Plan D usage
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -184,8 +187,10 @@ const ChatList = ({
                   (plan) => plan.planType === "P"
                 );
                 if (premiumPlans.length > 0) {
-                  const minPrice = Math.min(...premiumPlans.map((p) => p.price));
-                  return { expertId: expert.id, price: minPrice };
+                  // Show the highest premium plan price per minute
+                  const maxPrice = Math.max(...premiumPlans.map((p) => p.price));
+                  const pricePerMin = maxPrice / premiumPlans[0].duration; // Assuming all plans have a duration in minutes
+                  return { expertId: expert.id, price: pricePerMin };
                 }
               }
               return null;
@@ -212,6 +217,25 @@ const ChatList = ({
     const intervalId = setInterval(fetchExperts, 30000); // Fetch data every 30 seconds
 
     return () => clearInterval(intervalId); // Clear interval on component unmount
+  }, []);
+
+  useEffect(() => {
+    // Check if planType "D" has been used globally
+    const checkIfPlanDUsed = async () => {
+      try {
+        const response = await axios.get(
+          `https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${sessionStorage.getItem('userId')}`
+        );
+        if (response.data.isSuccess) {
+          const hasUsedPlanD = response.data.data.some(plan => plan.planType === 'D');
+          setHasGlobalUsedPlanD(hasUsedPlanD);
+        }
+      } catch (error) {
+        console.error("Error checking Plan D usage: ", error);
+      }
+    };
+
+    checkIfPlanDUsed();
   }, []);
 
   useEffect(() => {
@@ -271,7 +295,7 @@ const ChatList = ({
     >
       <div className="flex flex-col h-full">
         <div className="flex flex-row justify-between items-center mb-4 px-4 py-2 mt-1">
-          <img src={logo} alt="Logo" className="w-40 h-[40px]" />
+          <img src={logo} alt="Logo" className="w-50 h-[40px]" />
           <motion.div
             className="flex items-center border-[1px] rounded-full p-2 border-[#00000028] bg-gray-100"
             initial={{ width: "40px", opacity: 0 }}
@@ -358,8 +382,9 @@ const ChatList = ({
                       onSelectContact={handleContactSelect}
                       getExpertType={getExpertType}
                       activeTab={activeTab}
-                      premiumPrice={premiumPrices[contact.expertsId] || null} // Pass the premium price to the ContactItem
+                      premiumPrice={premiumPrices[contact.expertsId] || null} // Pass the highest premium price
                       hasUsedPlanD={usedPlanD[contact.expertsId]} // Pass if planType D was used for the expert
+                      hasGlobalUsedPlanD={hasGlobalUsedPlanD} // Pass global Plan D usage
                     />
                   );
                 })}
@@ -375,8 +400,9 @@ const ChatList = ({
                   onSelectContact={handleContactSelect}
                   getExpertType={getExpertType}
                   activeTab={activeTab}
-                  premiumPrice={premiumPrices[expert.id] || null} // Pass the premium price to the ContactItem
+                  premiumPrice={premiumPrices[expert.id] || null} // Pass the highest premium price
                   hasUsedPlanD={usedPlanD[expert.id]} // Pass if planType D was used for the expert
+                  hasGlobalUsedPlanD={hasGlobalUsedPlanD} // Pass global Plan D usage
                 />
               ))}
             </div>
@@ -391,8 +417,9 @@ const ChatList = ({
                   onSelectContact={handleContactSelect}
                   getExpertType={getExpertType}
                   activeTab={activeTab}
-                  premiumPrice={premiumPrices[expert.id] || null} // Pass the premium price to the ContactItem
+                  premiumPrice={premiumPrices[expert.id] || null} // Pass the highest premium price
                   hasUsedPlanD={usedPlanD[expert.id]} // Pass if planType D was used for the expert
+                  hasGlobalUsedPlanD={hasGlobalUsedPlanD} // Pass global Plan D usage
                 />
               ))}
             </div>
