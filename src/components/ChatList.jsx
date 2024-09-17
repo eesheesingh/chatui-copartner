@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { logo, sebi, loadingGif, chatIcon } from "../assets";
-import { IoMdSearch } from "react-icons/io";
+import { IoMdClose, IoMdSearch } from "react-icons/io";
 import axios from "axios";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -112,6 +112,15 @@ const ChatList = ({
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleSearchClick = () => {
+    setIsSearchOpen(true);
+  };
+
+  const handleSearchClose = () => {
+    setIsSearchOpen(false);
+    setSearchTerm(""); 
+  };
 
   const getExpertType = (typeId) => {
     switch (typeId) {
@@ -295,32 +304,49 @@ const ChatList = ({
     >
       <div className="flex flex-col h-full">
         <div className="flex flex-row justify-between items-center mb-4 px-4 py-2 mt-1">
-          <img src={logo} alt="Logo" className="w-50 h-[40px]" />
-          <motion.div
-            className="flex items-center border-[1px] rounded-full p-2 border-[#00000028] bg-gray-100"
-            initial={{ width: "40px", opacity: 0 }}
-            animate={
-              isSearchOpen
-                ? { width: "100%", opacity: 1 }
-                : { width: "40px", opacity: 1 }
-            }
-            transition={{ type: "spring", stiffness: 300 }}
-          >
-            <IoMdSearch
-              className="w-6 h-6 text-gray-600 cursor-pointer"
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
+          {/* Hide logo when search is open */}
+          {!isSearchOpen && (
+            <motion.img
+              src={logo}
+              alt="Logo"
+              className="w-50 h-[40px]"
+              initial={{ opacity: 1 }}
+              animate={{ opacity: isSearchOpen ? 0 : 1 }}
             />
-            {isSearchOpen && (
-              <input
-                type="text"
-                placeholder="Search Chats or Experts"
-                className="bg-transparent text-gray-600 focus:outline-none ml-2 flex-grow"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                autoFocus
+          )}
+          
+          <motion.div
+            className={`flex items-center border-[1px] rounded-full p-2 border-[#00000028] bg-gray-100 ${isSearchOpen ? 'w-full' : 'w-auto'}`}
+            initial={{ width: 'auto' }}
+            animate={{
+              width: isSearchOpen ? '100%' : 'auto',
+              transition: { type: 'spring', stiffness: 200, damping: 20 }
+            }}
+          >
+            {/* Show search icon or input based on state */}
+            {isSearchOpen ? (
+              <>
+                <input
+                  type="text"
+                  placeholder="Search Chats or Experts"
+                  className="bg-transparent text-gray-600 focus:outline-none ml-2 flex-grow"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  autoFocus
+                />
+                <IoMdClose
+                  className="w-6 h-6 text-gray-600 cursor-pointer ml-2"
+                  onClick={handleSearchClose}
+                />
+              </>
+            ) : (
+              <IoMdSearch
+                className="w-6 h-6 text-gray-600 cursor-pointer"
+                onClick={handleSearchClick}
               />
             )}
           </motion.div>
+      
         </div>
         <div className="flex-grow pt-3 chat-div rounded-t-[30px] bg-[#d9d9d96c]">
           <div className="flex justify-start gap-2 mb-4 px-4">
