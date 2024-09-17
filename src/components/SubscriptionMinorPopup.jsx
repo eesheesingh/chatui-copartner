@@ -8,6 +8,8 @@ const SubscriptionMinorPopup = ({
   expertName,
   chatId,
   mobileNumber,
+  onBackToChatList,
+  setShowSubscriptionPopup
 }) => {
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -82,7 +84,7 @@ const SubscriptionMinorPopup = ({
 
         // Razorpay options using dynamic props
         const options = {
-          key: "rzp_test_9lu374ftxzhZBK",
+          key: "rzp_live_D2N1nZHECBBkuW",
           amount: data.amountInPaise, // Amount in paise from API
           currency: "INR",
           name: expertName, // Expert name from props
@@ -91,10 +93,8 @@ const SubscriptionMinorPopup = ({
           handler: function (response) {
             console.log("Payment response:", response);
             capturePayment(response.razorpay_payment_id, data.orderId);
-
+            console.log(chatSubscriberCreateDto.transactionId);
             sessionStorage.setItem("transactionId", chatSubscriberCreateDto.transactionId);
-            sessionStorage.setItem("orderId", data.orderId);
-            sessionStorage.setItem("chatPlanId", selectedPlan.id);
           },
           prefill: {
             name: "John Doe", // You can make this dynamic if you want
@@ -157,7 +157,7 @@ const SubscriptionMinorPopup = ({
       })
       .then((data) => {
         if (data.success) {
-          alert("payment success"); // Redirect to success page if required
+          window.location.reload(); // Redirect to success page if required
         } else {
           alert(`Error: ${data.message}`);
         }
@@ -168,13 +168,18 @@ const SubscriptionMinorPopup = ({
       });
   };
 
+  const handleClosePopups = () => {
+    setShowSubscriptionPopup(false);
+    onBackToChatList()
+  }
+
   return (
     <>
       <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-40">
         <div className="bg-white border-2 border-dashed border-black rounded-xl shadow-md md:w-[380px] w-[90%] relative">
           <div className="p-6">
             <button
-              onClick={onClose}
+              onClick={() => handleClosePopups()}
               className="absolute top-8 right-4 text-gray-500 hover:text-gray-700"
             >
               <IoCloseCircleOutline className="w-6 h-6" />

@@ -52,6 +52,7 @@ const ChatApp = () => {
         if (data.isSuccess) {
           console.log("Payment Status:", data);
           setShowPremiumPlanPopup(false);
+          setShowSubscriptionPopup(false);
         } else {
           console.error("Payment status check failed:", data.errorMessages);
         }
@@ -112,6 +113,7 @@ const ChatApp = () => {
 
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
+    sessionStorage.removeItem('transactionId');
     window.location.reload();
   };
 
@@ -775,6 +777,8 @@ const ChatApp = () => {
           onClose={handleClosePaymentPopup}
           userId={userId}
           mobileNumber={username}
+          onBackToChatList={goBackToChatList}
+          setShowSubscriptionPopup={setShowSubscriptionPopup}
         />
       )}
     </div>
