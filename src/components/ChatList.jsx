@@ -59,7 +59,7 @@ const ContactItem = ({
                   )
                 ) : (
                   <>
-                    <p className="text-[17px] font-bold line-through">₹10/min</p>
+                    <p className="text-[17px] font-bold line-through">₹Loading/min</p>
                     {!hasGlobalUsedPlanD && (
                       <span className="text-gradient-2 font-bold text-[17px]">
                         FREE
@@ -175,44 +175,38 @@ const ChatList = ({
               const planResponse = await axios.get(
                 `https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expert.id}?page=1&pageSize=10`
               );
-              const availResponse = await axios.get(
-                `https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${sessionStorage.getItem('userId')}`
-              );
-
-              let hasUsedPlanD = false;
-              if (availResponse.data.isSuccess) {
-                hasUsedPlanD = availResponse.data.data.some(
-                  (plan) => plan.planType === "D" && plan.expertsId === expert.id
-                );
-              }
-
-              setUsedPlanD((prev) => ({
-                ...prev,
-                [expert.id]: hasUsedPlanD,
-              }));
-
+          
               if (planResponse.data.isSuccess) {
                 const premiumPlans = planResponse.data.data.filter(
-                  (plan) => plan.planType === "P"
+                  (plan) => plan.planType === "P" // Only consider premium plans
                 );
+          
                 if (premiumPlans.length > 0) {
-                  // Show the highest premium plan price per minute
-                  const maxPrice = Math.max(...premiumPlans.map((p) => p.price));
-                  const pricePerMin = maxPrice / premiumPlans[0].duration; // Assuming all plans have a duration in minutes
-                  return { expertId: expert.id, price: pricePerMin };
+                  // Find the premium plan with the highest price
+                  const highestPremiumPlan = premiumPlans.reduce((prev, current) => {
+                    return (prev.price > current.price) ? prev : current;
+                  });
+          
+                  // Calculate price per minute for the highest premium plan
+                  const pricePerMinute = highestPremiumPlan.price / highestPremiumPlan.duration;
+          
+                  return { expertId: expert.id, price: pricePerMinute };
                 }
               }
               return null;
             })
           );
-
+          
+          // Use the fetched pricePerMinute for each expert
           const pricesObj = premiumPrices.reduce((acc, item) => {
             if (item) {
               acc[item.expertId] = item.price;
             }
             return acc;
           }, {});
+          
           setPremiumPrices(pricesObj);
+          
         }
       } catch (error) {
         console.error("Error fetching experts: ", error);
