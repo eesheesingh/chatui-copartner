@@ -18,6 +18,9 @@ import { v4 as uuidv4 } from 'uuid';
 const ChatApp = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const touchStartXRef = useRef(0); // Ref to store initial touch position
+  const touchEndXRef = useRef(0); // Ref to store final touch position
+  const swipeThreshold = 100; 
 
   const [username, setUsername] = useState('');
   const [userId, setUserId] = useState('');
@@ -75,6 +78,53 @@ const ChatApp = () => {
     navigate(newPath, { replace: true });
   };
 
+    // Function to handle touch start
+    const handleTouchStart = (e) => {
+      touchStartXRef.current = e.touches[0].clientX;
+    };
+  
+    // Function to handle touch move
+    const handleTouchMove = (e) => {
+      touchEndXRef.current = e.touches[0].clientX;
+    };
+  
+    // Function to handle touch end and determine if it's a swipe
+    const handleTouchEnd = () => {
+      const touchStartX = touchStartXRef.current;
+      const touchEndX = touchEndXRef.current;
+      const touchDistance = touchEndX - touchStartX;
+  
+      // Check if swipe is from left to right and exceeds the threshold
+      if (touchDistance > swipeThreshold) {
+        goBackToChatList(); // Trigger navigation back to chat list
+      }
+    };
+  
+    // Function to handle back button press in mobile browsers
+    const handlePopState = () => {
+      if (selectedContact) {
+        goBackToChatList();
+      }
+    };
+  
+    useEffect(() => {
+      // Add touch event listeners on component mount
+      window.addEventListener('touchstart', handleTouchStart);
+      window.addEventListener('touchmove', handleTouchMove);
+      window.addEventListener('touchend', handleTouchEnd);
+  
+      // Add event listener for back button in mobile browsers
+      window.addEventListener('popstate', handlePopState);
+  
+      // Clean up event listeners on component unmount
+      return () => {
+        window.removeEventListener('touchstart', handleTouchStart);
+        window.removeEventListener('touchmove', handleTouchMove);
+        window.removeEventListener('touchend', handleTouchEnd);
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }, [selectedContact]);
+
   const handleExpiredTimer = (expertId) => {
     if (expertId !== currentExpertId) return;
 
@@ -103,6 +153,7 @@ const ChatApp = () => {
       console.error('Error checking PlanType D:', error);
     }
   };
+  
   
 
   useEffect(() => {
@@ -450,16 +501,19 @@ const ChatApp = () => {
     }));
 
     // If the user is not in the chat with this expert, increase the unread count
-    if (selectedContact?.email !== user) {
-      setUnreadMessages((prevUnread) => ({
-        ...prevUnread,
-        [user]: (prevUnread[user] || 0) + 1, // Increment unread count
-      }));
+      if (selectedContact?.name !== user) {
+        setUnreadMessages((prevUnread) => ({
+          ...prevUnread,
+          [user]: (prevUnread[user] || 0) + 1, // Increment unread count
+        }));
 
-      // Show notification using toast
-      toast.info(`New message from ${user}`);
-    }
-              
+        // Show notification using toast with the expert's name
+        const expert = contacts.find(contact => contact.email === user); // Find the expert in the contact list
+        if (expert) {
+          toast.info(`New message from ${expert.name}`); // Show the expert's name
+        }
+      }
+
 
         if (expertId === currentExpertId) {
           const timespan = {

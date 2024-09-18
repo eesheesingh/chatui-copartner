@@ -60,7 +60,7 @@ const ChatArea = ({ username, userImage, selectedContact, messages, onSendMessag
 
   useEffect(() => {
     const updateChatAreaHeight = () => {
-      setChatAreaHeight(window.innerHeight);
+      setChatAreaHeight(window.visualViewport.height);
     };
 
     window.addEventListener('resize', updateChatAreaHeight);
