@@ -49,6 +49,9 @@ const ChatApp = () => {
   const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false); // Add state for the payment popup
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [paidPlanChatId, setPaidPlanChatId] = useState(null);
+  const [isFirstReplyReceived, setIsFirstReplyReceived] = useState(
+    sessionStorage.getItem(`firstReplyReceived_${currentExpertId}`) === 'true'
+  );
 
   const checkPaymentStatus = (transactionId) => {
     fetch(`https://copartners.in:5137/api/ChatConfiguration/GetChatSubscribe/${transactionId}`)
@@ -79,13 +82,14 @@ const ChatApp = () => {
     if (transactionId) {
       checkPaymentStatus(transactionId); // Check payment status with stored transaction ID
     }
-  }, []);
+  }, []);  
 
   const handleOpenPaymentPopup = (plan) => {
     console.log(plan)
     setSelectedPlan(plan);
     setShowSubscriptionPopup(true); // Open the payment modal
   };
+  
 
   // Close the payment popup
   const handleClosePaymentPopup = () => {
@@ -268,6 +272,7 @@ const ChatApp = () => {
       const userImg = 'https://example.com/path-to-user-image.jpg';
       setUserImage(userImg);
     };
+    
 
     const fetchContacts = async () => {
       setLoadingContacts(true);
@@ -509,63 +514,64 @@ const ChatApp = () => {
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-     connection.on('ReceiveMessage', (user, message, receivedPlanType, planId, paidPlanId, startDateTime, endDateTime) => {
-  if (message !== '1' && message !== '20') {
-    const newMessage = {
-      user,
-      message,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      planType: receivedPlanType,
-      planId: planId,
-      paidPlanId: paidPlanId,
-      startDateTime: new Date(startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      endDateTime: new Date(endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages((prevMessages) => [...prevMessages, newMessage]);
-    setConversations((prevConversations) => ({
-      ...prevConversations,
-      [user]: [...(prevConversations[user] || []), { sender: user, text: message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
-    }));
-
-    // If the user is not in the chat with this expert, increase the unread count
-      if (selectedContact?.name !== user) {
-        setUnreadMessages((prevUnread) => ({
-          ...prevUnread,
-          [user]: (prevUnread[user] || 0) + 1, // Increment unread count
-        }));
-
-        // Show notification using toast with the expert's name
-        const expert = contacts.find(contact => contact.email === user); // Find the expert in the contact list
-        if (expert) {
-          toast.info(`New message from ${expert.name}`); // Show the expert's name
-        }
-      }
-
-
-        if (expertId === currentExpertId) {
-          const timespan = {
-            start: startDateTime,
-            end: endDateTime,
+      connection.on('ReceiveMessage', (user, message, receivedPlanType, planId, paidPlanId, startDateTime, endDateTime) => {
+        if (message !== '1' && message !== '20') {
+          const newMessage = {
+            user,
+            message,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            planType: receivedPlanType,
+            planId: planId,
+            paidPlanId: paidPlanId,
+            startDateTime: new Date(startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            endDateTime: new Date(endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
-          sessionStorage.setItem(`timespan_${currentExpertId}`, JSON.stringify(timespan));
-
-          const endTime = new Date(endDateTime);
-          const remainingTime = endTime - new Date();
-          setExpertsData((prevData) => ({
-            ...prevData,
-            [currentExpertId]: {
-              ...prevData[currentExpertId],
-              timer: remainingTime > 0 ? remainingTime / 1000 : 0,
-              latestTimespan: timespan
-            }
+      
+          setMessages((prevMessages) => [...prevMessages, newMessage]);
+          setConversations((prevConversations) => ({
+            ...prevConversations,
+            [user]: [...(prevConversations[user] || []), { sender: user, text: message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
           }));
-          sessionStorage.setItem(`timer_${currentExpertId}`, remainingTime > 0 ? remainingTime / 1000 : 0);
-          sessionStorage.setItem(`planType_${currentExpertId}`, receivedPlanType);
+      
+          // **Update timer and timespan immediately when receiving the message**
+          if (expertId === currentExpertId) {
+            const timespan = {
+              start: startDateTime,
+              end: endDateTime,
+            };
+            sessionStorage.setItem(`timespan_${currentExpertId}`, JSON.stringify(timespan));
+      
+            const endTime = new Date(endDateTime);
+            const remainingTime = endTime - new Date(); // Calculate remaining time
+      
+            // Update the timer in component state and sessionStorage
+            setExpertsData((prevData) => ({
+              ...prevData,
+              [currentExpertId]: {
+                ...prevData[currentExpertId],
+                timer: remainingTime > 0 ? remainingTime / 1000 : 0,
+                latestTimespan: timespan,
+              }
+            }));
+      
+            sessionStorage.setItem(`timer_${currentExpertId}`, remainingTime > 0 ? remainingTime / 1000 : 0);
+            sessionStorage.setItem(`planType_${currentExpertId}`, receivedPlanType);
+      
+            console.log(`Timer for expert ${currentExpertId} updated with ${remainingTime / 1000} seconds remaining.`);
+          }
+      
+          // **Check if this is the first reply from the expert for either FreePlan or PremiumPlan and refresh once**
+          if (!isFirstReplyReceived && expertId === currentExpertId) {
+            setIsFirstReplyReceived(true);
+            sessionStorage.setItem(`firstReplyReceived_${currentExpertId}`, 'true'); // Store the first reply flag in sessionStorage
+      
+            console.log('First reply from the expert received. Auto-refreshing the page...');
+            window.location.reload(); // Trigger page refresh
+          }
         }
-      }
-    });
-
+      });
+      
+      
     connection.on('LoadPreviousMessages', (messages) => {
       const filteredMessages = messages.filter(msg => msg.content !== '1' && msg.content !== '20');
       const formattedMessages = filteredMessages.map(message => ({
@@ -678,7 +684,7 @@ const ChatApp = () => {
         planType: selectedPlanType
       }
     }));
-
+  
     if (selectedPlanType === 'D') {
       const storedUserId = sessionStorage.getItem('userId');
       setPlanId(storedUserId);
@@ -686,6 +692,7 @@ const ChatApp = () => {
       sessionStorage.setItem(`planId_${currentExpertId}`, storedUserId);
       sessionStorage.setItem(`paidPlanId_${currentExpertId}`, storedUserId);
     } else if (selectedPlanType === 'F') {
+      // Handle FreePlan selection
       setPlanId(id); 
       setPaidPlanId(id);
       sessionStorage.setItem(`planId_${currentExpertId}`, id);
@@ -697,10 +704,16 @@ const ChatApp = () => {
       sessionStorage.setItem(`planId_${currentExpertId}`, id);
       sessionStorage.setItem(`paidPlanId_${currentExpertId}`, newPaidPlanId);
     }
-
+  
     sessionStorage.setItem(`planType_${currentExpertId}`, selectedPlanType);
+  
+    // **Reset first reply received state to trigger refresh for the next expert reply**
+    setIsFirstReplyReceived(false);
+    sessionStorage.removeItem(`firstReplyReceived_${currentExpertId}`); // Clear the sessionStorage flag for first reply
   };
-
+  
+  
+  
   const selectUser = async (contact) => {
     setMessages(conversations[contact.email] || []);
     setLoading(true);
