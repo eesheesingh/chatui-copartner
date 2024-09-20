@@ -1,18 +1,33 @@
-import React from 'react';
-import { subIcon } from '../assets';
-import { IoIosCloseCircleOutline } from 'react-icons/io';
-import { motion } from 'framer-motion'; // Import framer-motion
+import React from "react";
+import { subIcon } from "../assets";
+import { IoIosCloseCircleOutline } from "react-icons/io";
+import { motion } from "framer-motion"; // Import framer-motion
 
-const PremiumPlanPopup = ({ plans, onSelectPlan, onClose, onBackToChatList }) => {
-
-  const handlePaidPlan = (plan) => {
-    console.log('User has chosen the Premium plan:', plan);
-    onSelectPlan(plan.duration, plan.id, 'P');
-    onClose(); // Close only the PremiumPlanPopup
+const PremiumPlanPopup = ({
+  plans,
+  onSelectPlan,
+  onOpenPayment,
+  onClose,
+  onBackToChatList,
+}) => {
+  const getExpertType = (typeId) => {
+    switch (typeId) {
+      case 1:
+        return "Commodity";
+      case 2:
+        return "Equity";
+      case 3:
+        return "Futures & Options";
+      default:
+        return "Unknown";
+    }
   };
 
-  const handleCloseIconClick = () => {
-    onBackToChatList(); // Trigger going back to the chat list
+  const handlePaidPlan = (plan) => {
+    console.log("User has chosen the Premium plan:", plan);
+    onSelectPlan(plan.duration, plan.id, "P"); // Select the plan
+    onOpenPayment(plan); // Trigger the payment popup
+    onClose(); // Close the PremiumPlanPopup
   };
 
   // Determine the highlighted plan index based on the number of plans
@@ -32,25 +47,25 @@ const PremiumPlanPopup = ({ plans, onSelectPlan, onClose, onBackToChatList }) =>
   // Framer Motion variant for entrance animation from the bottom
   const popupVariants = {
     hidden: {
-      y: "100%",  // Start off the screen at the bottom
+      y: "100%", // Start off the screen at the bottom
       opacity: 0, // Start invisible
     },
     visible: {
-      y: 0,  // Bring it to the normal position
+      y: 0, // Bring it to the normal position
       opacity: 1, // Fade in
       transition: {
         type: "spring",
         stiffness: 500,
-        damping: 30
-      }
+        damping: 30,
+      },
     },
     exit: {
-      y: "100%",  // Exit down the screen
+      y: "100%", // Exit down the screen
       opacity: 0,
       transition: {
-        duration: 0.3
-      }
-    }
+        duration: 0.3,
+      },
+    },
   };
 
   return (
@@ -63,11 +78,16 @@ const PremiumPlanPopup = ({ plans, onSelectPlan, onClose, onBackToChatList }) =>
     >
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
-        <div className='flex items-center'>
-          <img src={subIcon} alt="" className='w-auto h-6' />
-          <h2 className="text-[20px] font-semibold font-poppins ml-3">Chats Plans</h2>
+        <div className="flex items-center">
+          <img src={subIcon} alt="" className="w-auto h-6" />
+          <h2 className="text-[20px] font-semibold font-poppins ml-3">
+            Chats Plans
+          </h2>
         </div>
-        <button onClick={handleCloseIconClick} className="text-gray-600 hover:text-gray-800 transition-colors">
+        <button
+          onClick={onBackToChatList}
+          className="text-gray-600 hover:text-gray-800 transition-colors"
+        >
           <IoIosCloseCircleOutline size={24} />
         </button>
       </div>
@@ -77,19 +97,30 @@ const PremiumPlanPopup = ({ plans, onSelectPlan, onClose, onBackToChatList }) =>
         {plans.map((plan, index) => (
           <li
             key={index}
-            className={`border rounded-2xl p-4 ${index === highlightedIndex ? 'border-blue-400 bg-[#0081f11b]' : 'border-gray-300'} transition-shadow hover:shadow-md`}
+            className={`border rounded-2xl p-4 ${
+              index === highlightedIndex
+                ? "border-blue-400 bg-[#0081f11b]"
+                : "border-gray-300"
+            } transition-shadow hover:shadow-md`}
           >
             <div className="flex items-center justify-between">
               <div>
                 {/* Display planName */}
-                <h3 className="text-lg font-semibold font-poppins">{plan.planName}</h3>
+                <h3 className="text-lg font-semibold font-poppins">
+                  {plan.planName}
+                </h3>
                 {/* Plan details */}
                 <p className="font-sans">
-                  <span className='font-bold'>₹{plan.price}</span> / <span>{plan.duration} Mins</span>
+                  <span className="font-bold">₹{plan.price}</span> /{" "}
+                  <span>{plan.duration} Mins</span>
                 </p>
               </div>
               <button
-                className={`px-4 py-2 w-[100px] h-[40px] rounded-lg ${index === highlightedIndex ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white' : 'bg-blue-100 border-[#0181f1] border-[1px] text-blue-600'} font-semibold hover:opacity-90 transition-opacity`}
+                className={`px-4 py-2 w-[100px] h-[40px] rounded-lg ${
+                  index === highlightedIndex
+                    ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                    : "bg-blue-100 border-[#0181f1] border-[1px] text-blue-600"
+                } font-semibold hover:opacity-90 transition-opacity`}
                 onClick={() => handlePaidPlan(plan)}
               >
                 BUY

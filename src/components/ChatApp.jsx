@@ -13,7 +13,7 @@ import * as signalR from '@microsoft/signalr';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
-// import SubscriptionMinorPopup from './SubscriptionMinorPopup';
+import SubscriptionMinorPopup from './SubscriptionMinorPopup';
 
 const ChatApp = () => {
   const location = useLocation();
@@ -48,10 +48,41 @@ const ChatApp = () => {
   const [hasUsedPlanD, setHasUsedPlanD] = useState(false);
   const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false); // Add state for the payment popup
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [paidPlanChatId, setPaidPlanChatId] = useState(null);
   const [isFirstReplyReceived, setIsFirstReplyReceived] = useState(
     sessionStorage.getItem(`firstReplyReceived_${currentExpertId}`) === 'true'
   );
+
+  const checkPaymentStatus = (transactionId) => {
+    fetch(`https://copartners.in:5137/api/ChatConfiguration/GetChatSubscribe/${transactionId}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.isSuccess) {
+          const { chatPlanId } = data.data;
+          setPaidPlanChatId(chatPlanId);
   
+          // Store the paid chatPlanId in sessionStorage
+          sessionStorage.setItem(`paidChatPlan_${chatPlanId}`, 'true');
+          
+          // Close popups after successful payment
+          setShowPremiumPlanPopup(false);
+          setShowSubscriptionPopup(false);
+        } else {
+          console.error("Payment status check failed:", data.errorMessages);
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching payment status:", error);
+      });
+  };  
+
+  // Check payment status on page load
+  useEffect(() => {
+    const transactionId = sessionStorage.getItem("transactionId");
+    if (transactionId) {
+      checkPaymentStatus(transactionId); // Check payment status with stored transaction ID
+    }
+  }, []);  
 
   const handleOpenPaymentPopup = (plan) => {
     console.log(plan)
@@ -144,6 +175,8 @@ const ChatApp = () => {
 
     sessionStorage.removeItem(`timer_${expertId}`);
     sessionStorage.removeItem('isTimerRunning');
+    sessionStorage.removeItem('transactionId');
+    sessionStorage.removeItem(`paidChatPlan_${paidPlanChatId}`)
     window.location.reload();
   };
 
@@ -348,68 +381,62 @@ const ChatApp = () => {
       try {
         const chatAvailResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatAvailUser/${userId}`);
         if (chatAvailResponse.data.isSuccess) {
-          const chatAvailPlans = chatAvailResponse.data.data; // Used plans from GetChatAvailUser
+          const chatPlans = chatAvailResponse.data.data.filter(plan => plan.expertsId === expertId);
+          const hasUsedD = chatPlans.some(plan => plan.planType === 'D');
+          const hasUsedF = chatPlans.some(plan => plan.planType === 'F');
     
-          // Used free plans for this expert from GetChatAvailUser
-          const usedFreePlansForThisExpert = chatAvailPlans.filter(plan => plan.planType === 'F' && plan.expertsId === expertId); 
-    
-          const hasUsedDWithAnyExpert = chatAvailPlans.some(plan => plan.planType === 'D'); // Global "D" check
-    
-          // If the user has not used Plan D with any expert, don't show any popup
-          if (!hasUsedDWithAnyExpert) {
-            setShowFreePlanPopup(false);
-            setShowPremiumPlanPopup(false);
-            return; // Exit early if Plan D hasn't been used
-          }
-    
-          // Fetch all available plans for this expert
-          const expertPlansResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=10`);
+          const expertPlansResponse = await axios.get(`https://copartners.in:5137/api/ChatConfiguration/GetChatPlanByExpertsId/${expertId}?page=1&pageSize=100000`);
           if (expertPlansResponse.data.isSuccess) {
             const expertPlans = expertPlansResponse.data.data;
-    
-            // All available free plans for this expert
-            const availableFreePlans = expertPlans.filter(plan => plan.planType === 'F');
             const premiumPlans = expertPlans.filter(plan => plan.planType === 'P');
             setPremiumPlans(premiumPlans);
     
-            // **Check if all free plans have been used**
-            const allFreePlansUsed = availableFreePlans.every(freePlan => 
-              usedFreePlansForThisExpert.some(usedPlan => usedPlan.chatPlanId === freePlan.id)
-            );
+            const freePlan = expertPlans.find(plan => plan.planType === 'F');
+            if (freePlan) {
+              setFreePlanDuration(freePlan.duration || 2);
+              setPlanId(freePlan.id);
+            }
     
             const isTimerRunning = sessionStorage.getItem(`timer_${expertId}`);
+            
+            // Check for paid chat plans in sessionStorage
+            const isPaidPlan = premiumPlans.some(plan => sessionStorage.getItem(`paidChatPlan_${plan.id}`));
     
-            // **If all free plans are used, open Premium Plan Popup**
-            if (allFreePlansUsed && premiumPlans.length > 0 && !isTimerRunning) {
-              setShowPremiumPlanPopup(true);
-              setShowFreePlanPopup(false); // Ensure Free Plan popup is hidden
-            } else if (!allFreePlansUsed && !isTimerRunning) {
-              // **If there are still free plans available, show the next FreePlanPopup**
-              const nextUnusedFreePlan = availableFreePlans.find(freePlan => 
-                !usedFreePlansForThisExpert.some(usedPlan => usedPlan.chatPlanId === freePlan.id)
-              );
-              console.log(nextUnusedFreePlan)
-              if (nextUnusedFreePlan) {
-                setFreePlanDuration(nextUnusedFreePlan.duration);
-                setPlanId(nextUnusedFreePlan.id);
-                setShowFreePlanPopup(true); // Show Free Plan popup for the next available free plan
-                setShowPremiumPlanPopup(false); // Hide Premium Plan popup
-              } else {
-                // If no unused free plan is found, open Premium Plan Popup
-                setShowPremiumPlanPopup(true);
+            // If the chat plan is paid, don't show the popup
+            if (!isPaidPlan) {
+              if (hasUsedPlanD) {
+                if (freePlan && !isTimerRunning && !hasUsedF) {
+                  setShowFreePlanPopup(true);
+                  setShowPremiumPlanPopup(false);
+                } else if (premiumPlans.length > 0 && hasUsedF && !isTimerRunning) {
+                  setShowPremiumPlanPopup(true);
+                  setShowFreePlanPopup(false);
+                }
+              } else if (isTimerRunning) {
+                setShowPremiumPlanPopup(false);
                 setShowFreePlanPopup(false);
+              } else if (!isTimerRunning) {
+                if (hasUsedD && hasUsedF && premiumPlans.length > 0) {
+                  setShowPremiumPlanPopup(true);
+                  setShowFreePlanPopup(false);
+                } else if (!freePlan && hasUsedD) {
+                  setShowPremiumPlanPopup(true);
+                  setShowFreePlanPopup(false);
+                } else if (hasUsedD && freePlan) {
+                  setShowFreePlanPopup(true);
+                  setShowPremiumPlanPopup(false);
+                } else if (premiumPlans.length > 0) {
+                  setShowPremiumPlanPopup(false);
+                  setShowFreePlanPopup(false);
+                }
               }
-            } else if (isTimerRunning) {
-              // No popups if a timer is running
-              setShowPremiumPlanPopup(false);
-              setShowFreePlanPopup(false);
             }
           }
         }
       } catch (error) {
         console.error('Error fetching plan data:', error);
       }
-    };
+    };    
     
 
     fetchUserImage();
@@ -833,15 +860,17 @@ const ChatApp = () => {
           onBackToChatList={goBackToChatList}
         />
       )}
-      {/* {showSubscriptionPopup && (
+      {showSubscriptionPopup && (
         <SubscriptionMinorPopup
           selectedPlan={selectedPlan} // Pass the selected plan to the payment modal
           onClose={handleClosePaymentPopup}
           userId={userId}
           mobileNumber={username}
+          onBackToChatList={goBackToChatList}
+          setShowSubscriptionPopup={setShowSubscriptionPopup}
         />
-      )} */}
-          <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />
+      )}
+      <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />
 
     </div>
   );
